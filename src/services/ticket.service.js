@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import { supabase } from '../config/supabase.js';
 import { generateTicketNo, generateScanCode } from '../utils/ids.js';
 import { throwIfError, assert } from './base.service.js';
+import { getBookingByRef } from './booking.service.js';
 import { normalizeString } from '../utils/validation.js';
 
 export const issueTicketsForBooking = async (bookingId) => {
@@ -61,6 +62,14 @@ export const issueTicketsForBooking = async (bookingId) => {
 };
 
 export const getTicketsByBookingNo = async (bookingNo) => {
+  const normalizedBookingNo = normalizeString(bookingNo, { field: 'bookingNo', min: 6, max: 32 });
+  const booking = await getBookingByRef(normalizedBookingNo);
+  const hasSuccessfulPayment = (booking.payments || []).some((payment) => payment.status === 'success');
+
+  if ((booking.tickets || []).length === 0 && booking.booking_status === 'confirmed' && hasSuccessfulPayment) {
+    await issueTicketsForBooking(booking.id);
+  }
+
   const { data, error } = await supabase
     .from('tickets')
     .select(`
@@ -70,7 +79,7 @@ export const getTicketsByBookingNo = async (bookingNo) => {
       schedules(*),
       ticket_types(*)
     `)
-    .eq('bookings.booking_no', normalizeString(bookingNo, { field: 'bookingNo', min: 6, max: 32 }));
+    .eq('bookings.booking_no', normalizedBookingNo);
 
   throwIfError(error);
   return data;

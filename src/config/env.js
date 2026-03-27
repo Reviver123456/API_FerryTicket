@@ -61,6 +61,7 @@ export const env = {
   nodeEnv,
   isProduction,
   appUrl: process.env.APP_URL || 'http://localhost:3000',
+  mockPaymentAutoSuccess: parseBoolean(process.env.MOCK_PAYMENT_AUTO_SUCCESS, true),
   jwtSecret: process.env.JWT_SECRET || 'change_me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   supabaseUrl: process.env.SUPABASE_URL,

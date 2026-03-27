@@ -1,4 +1,6 @@
+import QRCode from 'qrcode';
 import { supabase } from '../config/supabase.js';
+import { env } from '../config/env.js';
 import { generatePaymentRef } from '../utils/ids.js';
 import { throwIfError, assert } from './base.service.js';
 import { getBookingByRef, confirmBooking } from './booking.service.js';
@@ -8,6 +10,29 @@ import { normalizeEmail, normalizeEnum, normalizeNonNegativeNumber, normalizeOpt
 const PAYMENT_METHODS = ['qr_promptpay'];
 const PAYMENT_STATUSES = ['pending', 'success', 'failed', 'expired', 'refunded'];
 
+const buildMockPaymentPayload = async (paymentRef) => {
+  const qrValue = paymentRef;
+  const qrCodeUrl = await QRCode.toDataURL(qrValue);
+
+  return {
+    payment_url: `${env.appUrl.replace(/\/+$/, '')}/mock-payment/${paymentRef}`,
+    qr_value: qrValue,
+    qr_code_url: qrCodeUrl
+  };
+};
+
+const serializePayment = (payment) => {
+  const raw = payment?.raw_response_json || {};
+
+  return {
+    ...payment,
+    payment_url: raw.payment_url || null,
+    qr_value: raw.qr_value || null,
+    qr_text: raw.qr_text || raw.qr_value || null,
+    qr_code_url: raw.qr_code_url || null
+  };
+};
+
 export const createPayment = async ({ booking_no, contact_email, payment_method = 'qr_promptpay' }) => {
   const booking = await getBookingByRef(normalizeString(booking_no, { field: 'booking_no', min: 6, max: 32 }));
   assert(['pending_payment', 'draft'].includes(booking.booking_status), 'Booking is not payable');
@@ -16,14 +41,17 @@ export const createPayment = async ({ booking_no, contact_email, payment_method 
   assert(normalizeEmail(contact_email) === booking.contact_email.toLowerCase(), 'Payment access denied', 403);
 
   const existingSuccess = (booking.payments || []).find((payment) => payment.status === 'success');
-  assert(!existingSuccess, 'Booking already paid', 409);
+  if (existingSuccess) {
+    return serializePayment(existingSuccess);
+  }
 
   const existingPending = (booking.payments || []).find((payment) => payment.status === 'pending');
   if (existingPending) {
-    return existingPending;
+    return serializePayment(existingPending);
   }
 
   const payment_ref = generatePaymentRef();
+  const mockPaymentPayload = await buildMockPaymentPayload(payment_ref);
   const { data, error } = await supabase
     .from('payments')
     .insert([{
@@ -33,16 +61,28 @@ export const createPayment = async ({ booking_no, contact_email, payment_method 
       gateway_name: 'mock_gateway',
       amount: booking.total_amount,
       status: 'pending',
-      raw_response_json: {
-        payment_url: `/mock-payment/${payment_ref}`,
-        qr_value: payment_ref
-      }
+      raw_response_json: mockPaymentPayload
     }])
     .select('*')
     .single();
 
   throwIfError(error);
-  return data;
+
+  if (env.mockPaymentAutoSuccess) {
+    return handlePaymentWebhook({
+      payment_ref,
+      status: 'success',
+      transaction_id: `AUTO-${payment_ref}`,
+      amount: Number(booking.total_amount),
+      raw: {
+        ...mockPaymentPayload,
+        auto_success: true,
+        confirmed_at: new Date().toISOString()
+      }
+    });
+  }
+
+  return serializePayment(data);
 };
 
 export const getPaymentByRef = async (paymentRef) => {
@@ -53,7 +93,7 @@ export const getPaymentByRef = async (paymentRef) => {
     .single();
 
   throwIfError(error, 'Payment not found', 404);
-  return data;
+  return serializePayment(data);
 };
 
 export const handlePaymentWebhook = async ({ payment_ref, status, transaction_id = null, amount = null, raw = {} }) => {
@@ -74,7 +114,10 @@ export const handlePaymentWebhook = async ({ payment_ref, status, transaction_id
     status: normalizedStatus,
     transaction_id: normalizeOptionalString(transaction_id, { field: 'transaction_id', max: 120 }),
     paid_at: normalizedStatus === 'success' ? new Date().toISOString() : null,
-    raw_response_json: raw
+    raw_response_json: {
+      ...(payment.raw_response_json || {}),
+      ...(raw || {})
+    }
   };
 
   const { error: paymentError } = await supabase
