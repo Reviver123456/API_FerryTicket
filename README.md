@@ -97,7 +97,12 @@ curl -X POST http://localhost:3000/api/auth/login \
 curl http://localhost:3000/api/schedules
 ```
 
-### 4) Create booking draft
+### 4) Get ticket types
+```bash
+curl http://localhost:3000/api/ticket-types
+```
+
+### 5) Create booking draft
 ```bash
 curl -X POST http://localhost:3000/api/bookings/draft \
   -H "Content-Type: application/json" \
@@ -113,7 +118,7 @@ curl -X POST http://localhost:3000/api/bookings/draft \
   }'
 ```
 
-### 5) Update booking info
+### 6) Update booking info
 ```bash
 curl -X PUT http://localhost:3000/api/bookings/BKXXXXXXXXXX \
   -H "Content-Type: application/json" \
@@ -128,7 +133,7 @@ curl -X PUT http://localhost:3000/api/bookings/BKXXXXXXXXXX \
   }'
 ```
 
-### 6) Create payment
+### 7) Create payment
 ```bash
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
@@ -139,7 +144,7 @@ curl -X POST http://localhost:3000/api/payments \
   }'
 ```
 
-### 7) Mock payment webhook success
+### 8) Mock payment webhook success
 ```bash
 curl -X POST http://localhost:3000/api/payments/webhook/callback \
   -H "Content-Type: application/json" \
@@ -152,12 +157,12 @@ curl -X POST http://localhost:3000/api/payments/webhook/callback \
   }'
 ```
 
-### 8) Get tickets by booking
+### 9) Get tickets by booking
 ```bash
 curl "http://localhost:3000/api/tickets/booking/BKXXXXXXXXXX?contact_email=biza@example.com"
 ```
 
-### 9) Validate gate scan
+### 10) Validate gate scan
 ```bash
 curl -X POST http://localhost:3000/api/gate/validate \
   -H "Content-Type: application/json" \

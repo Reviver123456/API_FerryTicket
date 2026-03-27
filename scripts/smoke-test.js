@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { env } from '../src/config/env.js';
 
 const baseUrl = process.env.SMOKE_BASE_URL || `http://127.0.0.1:${env.port}`;
@@ -31,20 +30,9 @@ const request = async (path, { body, headers = {}, ...init } = {}) => {
   return payload.data;
 };
 
-const supabase = createClient(env.supabaseUrl, env.supabaseServerKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
-
-const { data: ticketType, error: ticketTypeError } = await supabase
-  .from('ticket_types')
-  .select('id, price')
-  .eq('code', 'ADULT')
-  .single();
-
-if (ticketTypeError) throw ticketTypeError;
+const ticketTypes = await request('/api/ticket-types');
+const ticketType = ticketTypes.find((item) => item.code === 'ADULT') || ticketTypes[0];
+if (!ticketType) throw new Error('No ticket types available');
 
 const schedules = await request('/api/schedules');
 const scheduleId = schedules[0]?.id;

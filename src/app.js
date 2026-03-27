@@ -6,6 +6,7 @@ import scheduleRoutes from './routes/schedule.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import ticketRoutes from './routes/ticket.routes.js';
+import ticketTypeRoutes from './routes/ticketType.routes.js';
 import gateRoutes from './routes/gate.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import { ok } from './utils/http.js';
@@ -48,6 +49,7 @@ app.get('/', (req, res) => ok(res, {
   endpoints: [
     'POST /api/auth/register',
     'POST /api/auth/login',
+    'GET /api/ticket-types',
     'GET /api/schedules',
     'POST /api/bookings/draft',
     'PUT /api/bookings/:bookingNo',
@@ -74,6 +76,7 @@ app.get('/health', async (req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/ticket-types', ticketTypeRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
