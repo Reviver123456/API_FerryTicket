@@ -1,0 +1,22 @@
+{
+  "name": "ferry-ticketing-node-supabase",
+  "version": "1.0.0",
+  "description": "Full system ferry ticketing backend with Node.js + Supabase",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "smoke": "node scripts/smoke-test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^5.1.5",
+    "qrcode": "^1.5.4"
+  }
+}
