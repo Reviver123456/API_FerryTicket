@@ -49,6 +49,9 @@ app.get('/', (req, res) => ok(res, {
   endpoints: [
     'POST /api/auth/register',
     'POST /api/auth/login',
+    'POST /api/auth/forgot-password',
+    'POST /api/auth/reset-password',
+    'POST /api/auth/profile/image',
     'GET /api/ticket-types',
     'GET /api/schedules',
     'POST /api/bookings/draft',

@@ -11,6 +11,8 @@
 
 ## ฟีเจอร์หลัก
 - สมัครสมาชิก / login
+- ลืมรหัสผ่าน / reset password
+- อัปโหลดรูปโปรไฟล์
 - ค้นหารอบเรือ
 - สร้าง booking draft
 - บันทึกข้อมูลผู้จองและผู้โดยสาร
@@ -52,6 +54,10 @@ npm run dev
    - `PAYMENT_WEBHOOK_SECRET`
    - `INTERNAL_API_KEY`
    - `JWT_SECRET`
+   - `PASSWORD_RESET_URL` (optional)
+   - `PASSWORD_RESET_EXPIRES_MINUTES` (optional)
+   - `PROFILE_IMAGE_BUCKET` (optional)
+   - `PROFILE_IMAGE_MAX_BYTES` (optional)
 
 ## สำหรับ Production
 - backend จะ hash password ด้วย `scrypt`
@@ -60,6 +66,8 @@ npm run dev
 - CORS จะใช้ allowlist จาก `CORS_ORIGINS`
 - มี rate limit พื้นฐานสำหรับทั้งระบบและ route auth
 - มี `GET /health` สำหรับ health check
+- forgot password จะคืน `debug.reset_token` และ `debug.reset_url` เฉพาะตอนที่ `NODE_ENV` ไม่ใช่ production
+- profile image จะถูกอัปโหลดเข้า Supabase Storage bucket แบบ public อัตโนมัติเมื่อมีการใช้งานครั้งแรก
 
 ## Smoke Test
 หลังจากตั้งค่า `.env` และรัน API แล้ว สามารถตรวจ flow หลักแบบ end-to-end ได้ด้วย
@@ -95,6 +103,36 @@ curl -X POST http://localhost:3000/api/auth/login \
 ### 3) Get schedules
 ```bash
 curl http://localhost:3000/api/schedules
+```
+
+### 3.1) Forgot password
+```bash
+curl -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "biza@example.com"
+  }'
+```
+
+### 3.2) Reset password
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "RESET_TOKEN_FROM_FORGOT_PASSWORD",
+    "new_password": "ProdReady123!"
+  }'
+```
+
+### 3.3) Upload profile image
+```bash
+curl -X POST http://localhost:3000/api/auth/profile/image \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "file_name": "avatar.png",
+    "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+  }'
 ```
 
 ### 4) Get ticket types
