@@ -20,6 +20,28 @@ const calculateTotals = (items = []) => {
   return { total_passengers, total_amount };
 };
 
+const BOOKING_WITH_RELATIONS_SELECT = `
+  *,
+  schedules(*),
+  booking_items(*, ticket_types(*)),
+  passengers(*),
+  payments(*),
+  tickets(*)
+`;
+
+const sortBookings = (bookings = []) =>
+  [...bookings].sort(
+    (left, right) => new Date(right.updated_at || right.created_at || 0).getTime() - new Date(left.updated_at || left.created_at || 0).getTime()
+  );
+
+const mergeBookings = (...collections) => {
+  const merged = collections.flat().filter(Boolean);
+
+  return merged.filter(
+    (booking, index) => merged.findIndex((candidate) => candidate.id === booking.id || candidate.booking_no === booking.booking_no) === index
+  );
+};
+
 export const createBookingDraft = async ({ user_id = null, schedule_id, items = [] }) => {
   const normalizedScheduleId = normalizeUuidish(schedule_id, 'schedule_id');
   assertNonEmptyArray(items, 'items');
@@ -132,18 +154,47 @@ export const updateBookingDetails = async (bookingNo, payload) => {
   return getBookingByRef(normalizedBookingNo);
 };
 
+export const listBookingsForUser = async ({ user_id = null, user_email = null } = {}) => {
+  const normalizedUserId = normalizeOptionalString(user_id, {
+    field: 'user_id',
+    min: 8,
+    max: 64
+  });
+  const normalizedUserEmail = normalizeEmail(user_email, { required: false });
+
+  assert(normalizedUserId || normalizedUserEmail, 'Unauthorized', 401);
+
+  const bookingsByUserId = [];
+  const bookingsByEmail = [];
+
+  if (normalizedUserId) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(BOOKING_WITH_RELATIONS_SELECT)
+      .eq('user_id', normalizedUserId);
+
+    throwIfError(error);
+    bookingsByUserId.push(...(data || []));
+  }
+
+  if (normalizedUserEmail) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(BOOKING_WITH_RELATIONS_SELECT)
+      .eq('contact_email', normalizedUserEmail);
+
+    throwIfError(error);
+    bookingsByEmail.push(...(data || []));
+  }
+
+  return sortBookings(mergeBookings(bookingsByUserId, bookingsByEmail));
+};
+
 export const getBookingByRef = async (bookingNo) => {
   const normalizedBookingNo = normalizeString(bookingNo, { field: 'bookingNo', min: 6, max: 32 });
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select(`
-      *,
-      schedules(*),
-      booking_items(*, ticket_types(*)),
-      passengers(*),
-      payments(*),
-      tickets(*)
-    `)
+    .select(BOOKING_WITH_RELATIONS_SELECT)
     .eq('booking_no', normalizedBookingNo)
     .single();
 

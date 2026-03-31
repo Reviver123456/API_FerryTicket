@@ -1,4 +1,4 @@
-import { createBookingDraft, getBookingByRef, updateBookingDetails, expireDraftBookings } from '../services/booking.service.js';
+import { createBookingDraft, getBookingByRef, listBookingsForUser, updateBookingDetails, expireDraftBookings } from '../services/booking.service.js';
 import { ok } from '../utils/http.js';
 import { assert } from '../services/base.service.js';
 import { normalizeEmail } from '../utils/validation.js';
@@ -26,6 +26,19 @@ export const show = async (req, res, next) => {
     const data = await getBookingByRef(req.params.bookingNo);
     assertBookingAccess(data, req.query.contact_email);
     return ok(res, data, 'Booking loaded');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const mine = async (req, res, next) => {
+  try {
+    const data = await listBookingsForUser({
+      user_id: req.user?.sub || null,
+      user_email: req.user?.email || null
+    });
+
+    return ok(res, data, 'Bookings loaded');
   } catch (error) {
     next(error);
   }
