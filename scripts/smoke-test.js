@@ -48,13 +48,16 @@ await request('/api/auth/register', {
   }
 });
 
-await request('/api/auth/login', {
+const login = await request('/api/auth/login', {
   method: 'POST',
   body: { email, password }
 });
 
 const booking = await request('/api/bookings/draft', {
   method: 'POST',
+  headers: {
+    Authorization: `Bearer ${login.token}`
+  },
   body: {
     schedule_id: scheduleId,
     items: [
@@ -66,6 +69,10 @@ const booking = await request('/api/bookings/draft', {
     ]
   }
 });
+
+if (booking.user_id !== login.user.id) {
+  throw new Error(`Expected booking.user_id to equal ${login.user.id}, received ${booking.user_id}`);
+}
 
 await request(`/api/bookings/${booking.booking_no}`, {
   method: 'PUT',

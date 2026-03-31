@@ -144,6 +144,7 @@ curl http://localhost:3000/api/ticket-types
 ```bash
 curl -X POST http://localhost:3000/api/bookings/draft \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "schedule_id": "SCHEDULE_UUID",
     "items": [
@@ -155,6 +156,9 @@ curl -X POST http://localhost:3000/api/bookings/draft \
     ]
   }'
 ```
+
+ถ้าส่ง `Authorization: Bearer YOUR_JWT_TOKEN` มาด้วย ระบบจะบันทึก `user_id` ลง booking ให้โดยอัตโนมัติ
+ถ้าไม่ส่ง token ระบบยังอนุญาตให้จองแบบ guest ได้ และ `user_id` จะเป็น `NULL`
 
 ### 6) Update booking info
 ```bash
