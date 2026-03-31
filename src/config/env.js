@@ -23,7 +23,6 @@ const supabaseServerKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABAS
 const required = [
   ['SUPABASE_URL', process.env.SUPABASE_URL],
   ['SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY', supabaseServerKey],
-  ['SUPABASE_ANON_KEY', process.env.SUPABASE_ANON_KEY],
   ['PAYMENT_WEBHOOK_SECRET', process.env.PAYMENT_WEBHOOK_SECRET],
   ['INTERNAL_API_KEY', process.env.INTERNAL_API_KEY]
 ];

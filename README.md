@@ -58,7 +58,7 @@ npm run dev
 5. นำค่าเหล่านี้มาใส่ใน `.env`
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY` หรือ `SUPABASE_SERVICE_ROLE_KEY`
-   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_ANON_KEY` (recommended)
    - `PAYMENT_WEBHOOK_SECRET`
    - `INTERNAL_API_KEY`
    - `PASSWORD_RESET_URL` (optional)
