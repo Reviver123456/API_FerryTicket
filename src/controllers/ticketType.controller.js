@@ -1,20 +1,10 @@
-import { ok } from '../utils/http.js';
 import { getTicketTypeById, listTicketTypes } from '../services/ticketType.service.js';
+import { createHandler as handle } from '../utils/controller.js';
 
-export const index = async (req, res, next) => {
-  try {
-    const data = await listTicketTypes(req.query);
-    return ok(res, data, 'Ticket types loaded');
-  } catch (error) {
-    next(error);
-  }
-};
+export const index = handle(listTicketTypes, 'Ticket types loaded', {
+  mapArgs: (req) => [req.query]
+});
 
-export const show = async (req, res, next) => {
-  try {
-    const data = await getTicketTypeById(req.params.id);
-    return ok(res, data, 'Ticket type loaded');
-  } catch (error) {
-    next(error);
-  }
-};
+export const show = handle(getTicketTypeById, 'Ticket type loaded', {
+  mapArgs: (req) => [req.params.id]
+});

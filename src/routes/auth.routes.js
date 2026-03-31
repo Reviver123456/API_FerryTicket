@@ -25,4 +25,5 @@ router.post('/forgot-password', authRateLimit, forgotPassword);
 router.post('/reset-password', authRateLimit, resetPasswordByToken);
 router.get('/me', authRequired, me);
 router.post('/profile/image', authRequired, updateProfileImage);
+
 export default router;

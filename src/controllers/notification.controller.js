@@ -1,11 +1,6 @@
 import { sendNotification } from '../services/notification.service.js';
-import { ok } from '../utils/http.js';
+import { createHandler as handle } from '../utils/controller.js';
 
-export const send = async (req, res, next) => {
-  try {
-    const data = await sendNotification(req.body);
-    return ok(res, data, 'Notification sent', 201);
-  } catch (error) {
-    next(error);
-  }
-};
+export const send = handle(sendNotification, 'Notification sent', {
+  status: 201
+});

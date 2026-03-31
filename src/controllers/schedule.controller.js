@@ -1,20 +1,10 @@
 import { listSchedules, getScheduleById } from '../services/schedule.service.js';
-import { ok } from '../utils/http.js';
+import { createHandler as handle } from '../utils/controller.js';
 
-export const index = async (req, res, next) => {
-  try {
-    const data = await listSchedules(req.query);
-    return ok(res, data, 'Schedules loaded');
-  } catch (error) {
-    next(error);
-  }
-};
+export const index = handle(listSchedules, 'Schedules loaded', {
+  mapArgs: (req) => [req.query]
+});
 
-export const show = async (req, res, next) => {
-  try {
-    const data = await getScheduleById(req.params.id);
-    return ok(res, data, 'Schedule loaded');
-  } catch (error) {
-    next(error);
-  }
-};
+export const show = handle(getScheduleById, 'Schedule loaded', {
+  mapArgs: (req) => [req.params.id]
+});

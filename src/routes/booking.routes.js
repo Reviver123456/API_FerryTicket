@@ -4,10 +4,11 @@ import { authOptional, authRequired } from '../middleware/authMiddleware.js';
 import { internalApiKeyRequired } from '../middleware/internalAuth.js';
 
 const router = Router();
+
 router.post('/draft', authOptional, createDraft);
-router.get('/my', authRequired, mine);
-router.get('/me', authRequired, mine);
-router.get('/:bookingNo', show);
-router.put('/:bookingNo', update);
+router.get(['/my', '/me'], authRequired, mine);
+router.route('/:bookingNo')
+  .get(show)
+  .put(update);
 router.post('/jobs/expire-stale', internalApiKeyRequired, expireDrafts);
 export default router;

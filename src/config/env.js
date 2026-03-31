@@ -65,8 +65,6 @@ export const env = {
   profileImageBucket: process.env.PROFILE_IMAGE_BUCKET || 'profile-images',
   profileImageMaxBytes: parseNumber(process.env.PROFILE_IMAGE_MAX_BYTES, 5 * 1024 * 1024),
   mockPaymentAutoSuccess: parseBoolean(process.env.MOCK_PAYMENT_AUTO_SUCCESS, false),
-  jwtSecret: process.env.JWT_SECRET || 'change_me',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServerKey,
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY,

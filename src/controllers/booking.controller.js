@@ -1,4 +1,5 @@
 import { createBookingDraft, getBookingByRef, listBookingsForUser, updateBookingDetails, expireDraftBookings } from '../services/booking.service.js';
+import { createHandler as handle } from '../utils/controller.js';
 import { ok } from '../utils/http.js';
 import { assert } from '../services/base.service.js';
 import { normalizeEmail } from '../utils/validation.js';
@@ -11,15 +12,10 @@ const assertBookingAccess = (booking, contactEmail) => {
   assert(normalizedContactEmail === booking.contact_email.toLowerCase(), 'Booking access denied', 403);
 };
 
-export const createDraft = async (req, res, next) => {
-  try {
-    const payload = { ...req.body, user_id: req.user?.sub || null };
-    const data = await createBookingDraft(payload);
-    return ok(res, data, 'Booking draft created', 201);
-  } catch (error) {
-    next(error);
-  }
-};
+export const createDraft = handle(createBookingDraft, 'Booking draft created', {
+  status: 201,
+  mapArgs: (req) => [{ ...req.body, user_id: req.user?.sub || null }]
+});
 
 export const show = async (req, res, next) => {
   try {
@@ -31,18 +27,12 @@ export const show = async (req, res, next) => {
   }
 };
 
-export const mine = async (req, res, next) => {
-  try {
-    const data = await listBookingsForUser({
-      user_id: req.user?.sub || null,
-      user_email: req.user?.email || null
-    });
-
-    return ok(res, data, 'Bookings loaded');
-  } catch (error) {
-    next(error);
-  }
-};
+export const mine = handle(listBookingsForUser, 'Bookings loaded', {
+  mapArgs: (req) => [{
+    user_id: req.user?.sub || null,
+    user_email: req.user?.email || null
+  }]
+});
 
 export const update = async (req, res, next) => {
   try {
@@ -55,11 +45,6 @@ export const update = async (req, res, next) => {
   }
 };
 
-export const expireDrafts = async (req, res, next) => {
-  try {
-    const data = await expireDraftBookings();
-    return ok(res, data, 'Expired stale bookings');
-  } catch (error) {
-    next(error);
-  }
-};
+export const expireDrafts = handle(expireDraftBookings, 'Expired stale bookings', {
+  mapArgs: () => []
+});

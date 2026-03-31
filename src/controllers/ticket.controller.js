@@ -2,6 +2,7 @@ import { env } from '../config/env.js';
 import { getBookingByRef } from '../services/booking.service.js';
 import { handlePaymentWebhook } from '../services/payment.service.js';
 import { getTicketsByBookingNo, resendTickets } from '../services/ticket.service.js';
+import { createHandler as handle } from '../utils/controller.js';
 import { ok } from '../utils/http.js';
 import { assert } from '../services/base.service.js';
 import { normalizeEmail } from '../utils/validation.js';
@@ -47,11 +48,6 @@ export const byBooking = async (req, res, next) => {
   }
 };
 
-export const resend = async (req, res, next) => {
-  try {
-    const data = await resendTickets(req.body.booking_no);
-    return ok(res, data, 'Tickets resent');
-  } catch (error) {
-    next(error);
-  }
-};
+export const resend = handle(resendTickets, 'Tickets resent', {
+  mapArgs: (req) => [req.body.booking_no]
+});

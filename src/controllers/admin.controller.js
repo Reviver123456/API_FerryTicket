@@ -1,4 +1,4 @@
-import { ok } from '../utils/http.js';
+import { createHandler } from '../utils/controller.js';
 import {
   adminPermissionsCatalog,
   cancelBooking,
@@ -60,17 +60,10 @@ import {
   updateSystemSettings
 } from '../services/admin.service.js';
 
-const handle = (service, message, {
-  status = 200,
-  mapArgs = (req) => [req.body, req.admin]
-} = {}) => async (req, res, next) => {
-  try {
-    const data = await service(...mapArgs(req));
-    return ok(res, data, message, status);
-  } catch (error) {
-    next(error);
-  }
-};
+const handle = (service, message, options = {}) => createHandler(service, message, {
+  mapArgs: (req) => [req.body, req.admin],
+  ...options
+});
 
 export const adminLogin = handle(loginAdmin, 'Admin login successful', {
   mapArgs: (req) => [req.body, {
