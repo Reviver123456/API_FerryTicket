@@ -368,21 +368,6 @@ begin
 end;
 $$;
 
-create or replace view public.schedule_overview as
-select
-  s.id,
-  s.schedule_code,
-  s.trip_date,
-  s.departure_time,
-  s.arrival_time,
-  s.capacity,
-  s.available_seats,
-  s.status,
-  v.boat_name,
-  v.registration_no
-from public.schedules s
-left join public.vessels v on v.id = s.vessel_id;
-
 create index if not exists idx_bookings_booking_no on public.bookings(booking_no);
 create index if not exists idx_bookings_schedule_id on public.bookings(schedule_id);
 create index if not exists idx_bookings_status on public.bookings(booking_status);
@@ -675,7 +660,9 @@ where route_name is null
    or origin_port is null
    or destination_port is null;
 
-create or replace view public.schedule_overview as
+drop view if exists public.schedule_overview;
+
+create view public.schedule_overview as
 select
   s.id,
   s.schedule_code,

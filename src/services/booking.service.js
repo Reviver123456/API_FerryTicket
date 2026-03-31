@@ -24,7 +24,8 @@ const calculateTotals = (items = []) => {
 
 const BOOKING_WITH_RELATIONS_SELECT = `
   *,
-  schedules(*),
+  schedules:schedules!bookings_schedule_id_fkey(*),
+  rescheduled_from_schedule:schedules!bookings_rescheduled_from_schedule_id_fkey(*),
   agents(*),
   booking_items(*, ticket_types(*)),
   passengers(*),

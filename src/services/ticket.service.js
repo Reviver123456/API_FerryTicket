@@ -13,7 +13,8 @@ export const issueTicketsForBooking = async (bookingId) => {
       passengers(*),
       booking_items(*),
       tickets(*),
-      schedules(*)
+      schedules:schedules!bookings_schedule_id_fkey(*),
+      rescheduled_from_schedule:schedules!bookings_rescheduled_from_schedule_id_fkey(*)
     `)
     .eq('id', bookingId)
     .single();
