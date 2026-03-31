@@ -12,6 +12,7 @@ create table if not exists public.users (
 );
 
 alter table public.users
+  add column if not exists auth_user_id uuid,
   add column if not exists profile_image_url text,
   add column if not exists profile_image_path text;
 
@@ -437,3 +438,294 @@ order by created_at asc, id asc
 offset 1
 limit 1
 on conflict (schedule_code) do nothing;
+
+create table if not exists public.admin_roles (
+  code text primary key,
+  name text not null,
+  description text,
+  permissions jsonb not null default '[]'::jsonb,
+  status text not null default 'active',
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.agents (
+  id uuid primary key default gen_random_uuid(),
+  agent_code text not null unique,
+  name text not null,
+  company_name text,
+  contact_name text,
+  email text,
+  phone text,
+  payment_terms_days integer not null default 0,
+  credit_limit numeric(12,2) not null default 0,
+  status text not null default 'active',
+  contract_notes text,
+  address text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.admin_password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  admin_user_id uuid not null references public.admin_users(id) on delete cascade,
+  token_hash text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  requested_ip inet,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ticket_price_rules (
+  id uuid primary key default gen_random_uuid(),
+  route_name text,
+  schedule_id uuid references public.schedules(id) on delete cascade,
+  ticket_type_id uuid not null references public.ticket_types(id) on delete cascade,
+  price numeric(12,2) not null,
+  season_name text,
+  valid_from date not null,
+  valid_to date,
+  version_no integer not null default 1,
+  priority integer not null default 0,
+  status text not null default 'active',
+  created_by_admin_id uuid references public.admin_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.agent_price_rules (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.agents(id) on delete cascade,
+  route_name text,
+  schedule_id uuid references public.schedules(id) on delete cascade,
+  ticket_type_id uuid not null references public.ticket_types(id) on delete cascade,
+  price numeric(12,2),
+  discount_amount numeric(12,2) not null default 0,
+  valid_from date not null,
+  valid_to date,
+  priority integer not null default 0,
+  status text not null default 'active',
+  created_by_admin_id uuid references public.admin_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_type text not null default 'admin',
+  actor_admin_user_id uuid references public.admin_users(id) on delete set null,
+  actor_user_id uuid references public.users(id) on delete set null,
+  actor_role text,
+  action text not null,
+  entity_type text not null,
+  entity_id text not null,
+  booking_id uuid references public.bookings(id) on delete set null,
+  old_values jsonb,
+  new_values jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.system_settings (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  key text not null,
+  value_json jsonb not null default '{}'::jsonb,
+  description text,
+  is_public boolean not null default false,
+  updated_by_admin_id uuid references public.admin_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(category, key)
+);
+
+alter table public.ticket_types
+  add column if not exists display_order integer not null default 0,
+  add column if not exists requires_document boolean not null default false,
+  add column if not exists special_condition text;
+
+alter table public.schedules
+  add column if not exists route_name text,
+  add column if not exists origin_port text,
+  add column if not exists destination_port text,
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists cancel_reason text;
+
+alter table public.bookings
+  add column if not exists agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists payment_due_at timestamptz,
+  add column if not exists notes text,
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists cancel_reason text,
+  add column if not exists rescheduled_from_schedule_id uuid references public.schedules(id) on delete set null;
+
+alter table public.payments
+  add column if not exists reference_no text,
+  add column if not exists proof_url text,
+  add column if not exists refund_reason text,
+  add column if not exists refunded_at timestamptz,
+  add column if not exists confirmed_by_admin_id uuid references public.admin_users(id) on delete set null;
+
+alter table public.tickets
+  add column if not exists boarded_at timestamptz;
+
+alter table public.gate_logs
+  add column if not exists admin_user_id uuid references public.admin_users(id) on delete set null;
+
+alter table public.notifications
+  add column if not exists admin_user_id uuid references public.admin_users(id) on delete set null,
+  add column if not exists type text not null default 'info',
+  add column if not exists priority text not null default 'normal',
+  add column if not exists is_read boolean not null default false,
+  add column if not exists read_at timestamptz,
+  add column if not exists target_path text,
+  add column if not exists meta_json jsonb not null default '{}'::jsonb;
+
+alter table public.admin_users
+  add column if not exists username text,
+  add column if not exists phone text,
+  add column if not exists auth_user_id uuid,
+  add column if not exists agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists permissions_override jsonb not null default '[]'::jsonb,
+  add column if not exists two_factor_enabled boolean not null default false,
+  add column if not exists two_factor_method text,
+  add column if not exists last_login_at timestamptz,
+  add column if not exists last_login_ip inet;
+
+drop trigger if exists set_admin_roles_updated_at on public.admin_roles;
+create trigger set_admin_roles_updated_at before update on public.admin_roles
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_agents_updated_at on public.agents;
+create trigger set_agents_updated_at before update on public.agents
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_ticket_price_rules_updated_at on public.ticket_price_rules;
+create trigger set_ticket_price_rules_updated_at before update on public.ticket_price_rules
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_agent_price_rules_updated_at on public.agent_price_rules;
+create trigger set_agent_price_rules_updated_at before update on public.agent_price_rules
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_system_settings_updated_at on public.system_settings;
+create trigger set_system_settings_updated_at before update on public.system_settings
+for each row execute function public.set_updated_at();
+
+create unique index if not exists admin_password_reset_tokens_token_hash_idx
+  on public.admin_password_reset_tokens(token_hash);
+create unique index if not exists users_auth_user_id_idx
+  on public.users(auth_user_id)
+  where auth_user_id is not null;
+create unique index if not exists admin_users_username_idx
+  on public.admin_users(username)
+  where username is not null;
+create unique index if not exists admin_users_auth_user_id_idx
+  on public.admin_users(auth_user_id)
+  where auth_user_id is not null;
+create index if not exists idx_bookings_agent_id on public.bookings(agent_id);
+create index if not exists idx_payments_booking_id on public.payments(booking_id);
+create index if not exists idx_notifications_admin_user_id on public.notifications(admin_user_id);
+create index if not exists idx_notifications_is_read on public.notifications(is_read);
+create index if not exists idx_agents_status on public.agents(status);
+create index if not exists idx_ticket_price_rules_lookup
+  on public.ticket_price_rules(ticket_type_id, status, valid_from, valid_to);
+create index if not exists idx_agent_price_rules_lookup
+  on public.agent_price_rules(agent_id, ticket_type_id, status, valid_from, valid_to);
+create index if not exists idx_audit_logs_entity on public.audit_logs(entity_type, entity_id);
+create index if not exists idx_audit_logs_booking_id on public.audit_logs(booking_id);
+create index if not exists idx_system_settings_category on public.system_settings(category);
+create index if not exists idx_schedules_route_name on public.schedules(route_name);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'agents_credit_limit_non_negative'
+  ) then
+    alter table public.agents
+      add constraint agents_credit_limit_non_negative check (credit_limit >= 0);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'ticket_price_rules_price_non_negative'
+  ) then
+    alter table public.ticket_price_rules
+      add constraint ticket_price_rules_price_non_negative check (price >= 0);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'agent_price_rules_values_non_negative'
+  ) then
+    alter table public.agent_price_rules
+      add constraint agent_price_rules_values_non_negative check (
+        coalesce(price, 0) >= 0 and discount_amount >= 0
+      );
+  end if;
+end $$;
+
+update public.schedules
+set
+  route_name = coalesce(route_name, 'Main Pier - Island Pier'),
+  origin_port = coalesce(origin_port, 'Main Pier'),
+  destination_port = coalesce(destination_port, 'Island Pier')
+where route_name is null
+   or origin_port is null
+   or destination_port is null;
+
+create or replace view public.schedule_overview as
+select
+  s.id,
+  s.schedule_code,
+  s.trip_date,
+  s.departure_time,
+  s.arrival_time,
+  s.capacity,
+  s.available_seats,
+  s.status,
+  s.route_name,
+  s.origin_port,
+  s.destination_port,
+  s.cancelled_at,
+  s.cancel_reason,
+  v.boat_name,
+  v.registration_no
+from public.schedules s
+left join public.vessels v on v.id = s.vessel_id;
+
+insert into public.admin_roles(code, name, description, permissions, status, sort_order)
+values
+  ('super_admin', 'Super Admin', 'Full system access', '["*"]'::jsonb, 'active', 1),
+  ('admin', 'Admin', 'Operational administrator', '["dashboard.view","schedules.view","schedules.manage","ticket_types.view","ticket_types.manage","prices.view","prices.manage","bookings.view","bookings.manage","bookings.cancel","bookings.reschedule","tickets.resend","pos.sell","gate.scan","payments.view","payments.manage","payments.refund","reports.view","users.view","users.manage","roles.view","agents.view","agents.manage","notifications.view","notifications.manage","settings.view","settings.manage"]'::jsonb, 'active', 2),
+  ('staff', 'Staff', 'General counter staff', '["dashboard.view","schedules.view","ticket_types.view","bookings.view","bookings.manage","pos.sell","gate.scan","notifications.view"]'::jsonb, 'active', 3),
+  ('ticket_staff', 'Ticket Staff', 'Walk-in sales and booking operations', '["dashboard.view","schedules.view","ticket_types.view","bookings.view","bookings.manage","pos.sell","gate.scan","notifications.view"]'::jsonb, 'active', 4),
+  ('scanner', 'Scanner', 'Boarding gate scanner', '["dashboard.view","schedules.view","gate.scan","bookings.view","notifications.view"]'::jsonb, 'active', 5),
+  ('finance', 'Finance', 'Payment and refund management', '["dashboard.view","payments.view","payments.manage","payments.refund","reports.view","bookings.view","notifications.view"]'::jsonb, 'active', 6),
+  ('agent', 'Agent', 'Partner booking access', '["dashboard.view","schedules.view","prices.view","bookings.view","bookings.manage","notifications.view"]'::jsonb, 'active', 7)
+on conflict (code) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  permissions = excluded.permissions,
+  status = excluded.status,
+  sort_order = excluded.sort_order,
+  updated_at = now();
+
+insert into public.system_settings(category, key, value_json, description, is_public)
+values
+  ('general', 'system_name', '{"value":"Ferry Ticketing Admin"}'::jsonb, 'System display name', true),
+  ('general', 'company_profile', '{"company_name":"Ferry Ticketing Co., Ltd.","tax_id":"","phone":"","email":""}'::jsonb, 'Company profile', false),
+  ('ticketing', 'ticket_number_format', '{"prefix":"TK","digits":10}'::jsonb, 'Ticket number format', false),
+  ('payment', 'payment_expiry_minutes', '{"value":15}'::jsonb, 'Payment due time in minutes', false),
+  ('payment', 'supported_channels', '{"channels":["cash","transfer","qr_promptpay","card"]}'::jsonb, 'Supported payment channels', false),
+  ('tax', 'vat', '{"enabled":false,"rate":7}'::jsonb, 'VAT configuration', false),
+  ('printing', 'ticket_template', '{"size":"80mm","show_qr":true}'::jsonb, 'Ticket print template', false),
+  ('notifications', 'templates', '{"booking_created":"Booking created","payment_success":"Payment successful","payment_failed":"Payment failed"}'::jsonb, 'Notification templates', false)
+on conflict (category, key) do update
+set
+  value_json = excluded.value_json,
+  description = excluded.description,
+  is_public = excluded.is_public,
+  updated_at = now();

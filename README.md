@@ -3,6 +3,7 @@
 โปรเจกต์นี้เป็น Backend แบบ Full System สำหรับระบบจองตั๋วเรือ โดยใช้:
 - Node.js + Express
 - Supabase (Postgres)
+- Supabase Auth
 - QR E-Ticket
 - Booking Draft / Hold Seat
 - Payment Mock Webhook
@@ -22,6 +23,12 @@
 - เปิดดู My Ticket
 - สแกน Gate เพื่อใช้งานตั๋ว
 - บันทึก notification และ gate logs
+- Admin login / permission-based access control
+- Admin dashboard / schedule management / ticket type management
+- Standard pricing / Agent pricing
+- Booking list / booking detail / reschedule / cancel / refund
+- Walk-in POS sale
+- Payment admin / reports / users / roles / agents / notifications / settings
 
 ## โครงสร้างโปรเจกต์
 ```
@@ -47,25 +54,32 @@ npm run dev
 1. สร้างโปรเจกต์ใน Supabase
 2. เปิด SQL Editor
 3. วางไฟล์ `supabase/schema.sql`
-4. นำค่าเหล่านี้มาใส่ใน `.env`
+4. เปิดใช้งาน Supabase Auth
+5. นำค่าเหล่านี้มาใส่ใน `.env`
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY` หรือ `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPABASE_ANON_KEY`
    - `PAYMENT_WEBHOOK_SECRET`
    - `INTERNAL_API_KEY`
-   - `JWT_SECRET`
    - `PASSWORD_RESET_URL` (optional)
+   - `ADMIN_PASSWORD_RESET_URL` (optional)
    - `PASSWORD_RESET_EXPIRES_MINUTES` (optional)
    - `PROFILE_IMAGE_BUCKET` (optional)
    - `PROFILE_IMAGE_MAX_BYTES` (optional)
+   - `BOOKING_HOLD_MINUTES` (optional)
+   - `BOOKING_EXPIRY_JOB_ENABLED` (optional)
+   - `BOOKING_EXPIRY_JOB_INTERVAL_MS` (optional)
 
 ## สำหรับ Production
-- backend จะ hash password ด้วย `scrypt`
+- password local แบบเดิมจะถูก hash ด้วย `scrypt` ระหว่างช่วง migrate
+- customer/admin login จะออก `token` จาก Supabase Auth
 - route ภายในต้องส่ง `x-internal-api-key`
 - payment webhook ต้องส่ง `x-webhook-secret`
 - CORS จะใช้ allowlist จาก `CORS_ORIGINS`
 - มี rate limit พื้นฐานสำหรับทั้งระบบและ route auth
 - มี `GET /health` สำหรับ health check
+- มี `GET /docs` และ `GET /docs/openapi.json` สำหรับ Swagger / OpenAPI
+- มี background job สำหรับ expire booking draft อัตโนมัติ
 - forgot password จะคืน `debug.reset_token` และ `debug.reset_url` เฉพาะตอนที่ `NODE_ENV` ไม่ใช่ production
 - profile image จะถูกอัปโหลดเข้า Supabase Storage bucket แบบ public อัตโนมัติเมื่อมีการใช้งานครั้งแรก
 
@@ -100,6 +114,8 @@ curl -X POST http://localhost:3000/api/auth/login \
   }'
 ```
 
+response จะคืน `token`, `refresh_token` และ `session` จาก Supabase Auth
+
 ### 3) Get schedules
 ```bash
 curl http://localhost:3000/api/schedules
@@ -128,7 +144,7 @@ curl -X POST http://localhost:3000/api/auth/reset-password \
 ```bash
 curl -X POST http://localhost:3000/api/auth/profile/image \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "file_name": "avatar.png",
     "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
@@ -144,7 +160,7 @@ curl http://localhost:3000/api/ticket-types
 ```bash
 curl -X POST http://localhost:3000/api/bookings/draft \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "schedule_id": "SCHEDULE_UUID",
     "items": [
@@ -157,8 +173,12 @@ curl -X POST http://localhost:3000/api/bookings/draft \
   }'
 ```
 
-ถ้าส่ง `Authorization: Bearer YOUR_JWT_TOKEN` มาด้วย ระบบจะบันทึก `user_id` ลง booking ให้โดยอัตโนมัติ
+ถ้าส่ง `Authorization: Bearer YOUR_ACCESS_TOKEN` มาด้วย ระบบจะบันทึก `user_id` ลง booking ให้โดยอัตโนมัติ
 ถ้าไม่ส่ง token ระบบยังอนุญาตให้จองแบบ guest ได้ และ `user_id` จะเป็น `NULL`
+
+## Swagger / OpenAPI
+- Swagger UI: `GET /docs`
+- OpenAPI JSON: `GET /docs/openapi.json`
 
 ### 6) Update booking info
 ```bash
@@ -216,6 +236,84 @@ curl -X POST http://localhost:3000/api/gate/validate \
   }'
 ```
 
+## Admin API
+
+ตัวอย่าง route หลักฝั่ง admin:
+
+- `POST /api/admin/auth/login`
+- `GET /api/admin/auth/me`
+- `GET /api/admin/dashboard`
+- `GET|POST|PUT /api/admin/schedules`
+- `GET|POST|PUT /api/admin/ticket-types`
+- `GET|POST|PUT /api/admin/prices/standard`
+- `GET|POST|PUT /api/admin/prices/agent`
+- `GET|PUT /api/admin/bookings`
+- `POST /api/admin/pos/sales`
+- `POST /api/admin/gate/scan`
+- `GET|POST /api/admin/payments`
+- `GET /api/admin/reports/sales`
+- `GET /api/admin/reports/passengers`
+- `GET|POST|PUT /api/admin/users`
+- `GET|POST|PUT /api/admin/roles`
+- `GET|POST|PUT /api/admin/agents`
+- `GET|POST /api/admin/notifications`
+- `GET|PUT /api/admin/settings`
+
+ตัวอย่าง admin login:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username_or_email": "admin@example.com",
+    "password": "admin123456",
+    "remember_me": true
+  }'
+```
+
+ตัวอย่างสร้างรอบเรือฝั่ง admin:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/schedules \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
+  -d '{
+    "trip_date": "2026-04-01",
+    "departure_time": "09:00",
+    "arrival_time": "10:30",
+    "route_name": "Main Pier - Island Pier",
+    "origin_port": "Main Pier",
+    "destination_port": "Island Pier",
+    "capacity": 120,
+    "status": "open"
+  }'
+```
+
+ตัวอย่างขายตั๋ว Walk-in:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/pos/sales \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
+  -d '{
+    "schedule_id": "SCHEDULE_UUID",
+    "contact_name": "Walk-in Customer",
+    "contact_phone": "0812345678",
+    "payment_method": "cash",
+    "mark_paid": true,
+    "items": [
+      {
+        "ticket_type_id": "TICKET_TYPE_UUID",
+        "quantity": 2
+      }
+    ],
+    "passengers": [
+      { "full_name": "Passenger 1", "passenger_type": "adult" },
+      { "full_name": "Passenger 2", "passenger_type": "adult" }
+    ]
+  }'
+```
+
 ## สถานะหลักในระบบ
 ### Booking Status
 - `draft`
@@ -242,12 +340,9 @@ curl -X POST http://localhost:3000/api/gate/validate \
 - Payment Gateway ยังเป็น mock webhook เพื่อให้เชื่อมของจริงต่อได้ง่าย
 - route ภายในควรใช้ `INTERNAL_API_KEY` ผ่าน API Gateway หรือ private network
 - ควรเปิดใช้ Supabase RLS และ policy เพิ่มเมื่อมี frontend หรือ service อื่นใช้ `anon/publishable key`
-- ควรเพิ่มระบบ admin dashboard, report API, refund flow และ queue job ในเฟสถัดไป
+- account local เดิมจะถูก migrate เข้า Supabase Auth ตอน login หรือ reset password ครั้งถัดไปอัตโนมัติ
 
 ## สิ่งที่แนะนำให้ทำต่อ
 - ต่อ frontend React / Next.js
 - เชื่อม PromptPay / Omise / 2C2P / GB Prime Pay
-- ใช้ Supabase Auth แทน password แบบ local
-- เพิ่ม cron job สำหรับ expire booking อัตโนมัติ
-- เพิ่ม Swagger / OpenAPI
 - เพิ่ม unit test และ integration test

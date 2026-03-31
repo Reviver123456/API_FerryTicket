@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { generateBookingNo } from '../utils/ids.js';
 import { addMinutesIso, isExpired } from '../utils/date.js';
 import { throwIfError, assert } from './base.service.js';
+import { resolveTicketPrice } from './pricing.service.js';
 import {
   assertNonEmptyArray,
   normalizeEmail,
@@ -11,6 +12,7 @@ import {
   normalizePhone,
   normalizePositiveInteger,
   normalizeString,
+  normalizeOptionalUuidish,
   normalizeUuidish
 } from '../utils/validation.js';
 
@@ -23,6 +25,7 @@ const calculateTotals = (items = []) => {
 const BOOKING_WITH_RELATIONS_SELECT = `
   *,
   schedules(*),
+  agents(*),
   booking_items(*, ticket_types(*)),
   passengers(*),
   payments(*),
@@ -42,14 +45,42 @@ const mergeBookings = (...collections) => {
   );
 };
 
-export const createBookingDraft = async ({ user_id = null, schedule_id, items = [] }) => {
+export const createBookingDraft = async ({
+  user_id = null,
+  schedule_id,
+  agent_id = null,
+  source_channel = 'web',
+  items = []
+}) => {
   const normalizedScheduleId = normalizeUuidish(schedule_id, 'schedule_id');
+  const normalizedAgentId = normalizeOptionalUuidish(agent_id, 'agent_id');
+  const normalizedSourceChannel = normalizeString(source_channel || 'web', {
+    field: 'source_channel',
+    min: 2,
+    max: 40
+  });
   assertNonEmptyArray(items, 'items');
 
-  const normalizedItems = items.map((item, index) => ({
-    ticket_type_id: normalizeUuidish(item.ticket_type_id, `items[${index}].ticket_type_id`),
-    quantity: normalizePositiveInteger(item.quantity, `items[${index}].quantity`),
-    unit_price: normalizeNonNegativeNumber(item.unit_price, `items[${index}].unit_price`)
+  const normalizedItems = await Promise.all(items.map(async (item, index) => {
+    const ticketTypeId = normalizeUuidish(item.ticket_type_id, `items[${index}].ticket_type_id`);
+    const quantity = normalizePositiveInteger(item.quantity, `items[${index}].quantity`);
+    const manualUnitPrice = item.manual_unit_price === undefined || item.manual_unit_price === null || item.manual_unit_price === ''
+      ? null
+      : normalizeNonNegativeNumber(item.manual_unit_price, `items[${index}].manual_unit_price`);
+
+    const pricing = manualUnitPrice === null
+      ? await resolveTicketPrice({
+        ticket_type_id: ticketTypeId,
+        schedule_id: normalizedScheduleId,
+        agent_id: normalizedAgentId
+      })
+      : { final_price: manualUnitPrice };
+
+    return {
+      ticket_type_id: ticketTypeId,
+      quantity,
+      unit_price: Number(pricing.final_price)
+    };
   }));
 
   const { total_passengers, total_amount } = calculateTotals(normalizedItems);
@@ -70,11 +101,13 @@ export const createBookingDraft = async ({ user_id = null, schedule_id, items = 
         booking_no,
         user_id,
         schedule_id: normalizedScheduleId,
+        agent_id: normalizedAgentId,
         total_passengers,
         total_amount,
         booking_status: 'draft',
         expired_at,
-        source_channel: 'web'
+        source_channel: normalizedSourceChannel,
+        payment_due_at: expired_at
       }])
       .select('*')
       .single();
@@ -91,6 +124,21 @@ export const createBookingDraft = async ({ user_id = null, schedule_id, items = 
 
     const { error: itemsError } = await supabase.from('booking_items').insert(bookingItemsPayload);
     throwIfError(itemsError);
+
+    const { data: scheduleAfterReserve, error: scheduleError } = await supabase
+      .from('schedules')
+      .select('id, available_seats, status')
+      .eq('id', normalizedScheduleId)
+      .single();
+    throwIfError(scheduleError);
+
+    if (Number(scheduleAfterReserve.available_seats) === 0 && scheduleAfterReserve.status === 'open') {
+      const { error: closeScheduleError } = await supabase
+        .from('schedules')
+        .update({ status: 'closed' })
+        .eq('id', normalizedScheduleId);
+      throwIfError(closeScheduleError);
+    }
 
     return getBookingByRef(booking.booking_no);
   } catch (error) {

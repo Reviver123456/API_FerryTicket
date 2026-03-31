@@ -7,6 +7,20 @@ begin;
 -- admin: admin@example.com / admin123456
 -- admin: staff@example.com / admin123456
 
+insert into public.admin_roles(code, name, description, permissions, status, sort_order)
+values
+  ('admin', 'Admin', 'Operational administrator', '["dashboard.view","schedules.view","schedules.manage","ticket_types.view","ticket_types.manage","prices.view","prices.manage","bookings.view","bookings.manage","bookings.cancel","bookings.reschedule","tickets.resend","pos.sell","gate.scan","payments.view","payments.manage","payments.refund","reports.view","users.view","users.manage","roles.view","agents.view","agents.manage","notifications.view","notifications.manage","settings.view","settings.manage"]'::jsonb, 'active', 1),
+  ('staff', 'Staff', 'Counter and scanner staff', '["dashboard.view","schedules.view","ticket_types.view","bookings.view","bookings.manage","pos.sell","gate.scan","notifications.view"]'::jsonb, 'active', 2),
+  ('finance', 'Finance', 'Finance operations', '["dashboard.view","payments.view","payments.manage","payments.refund","reports.view","bookings.view","notifications.view"]'::jsonb, 'active', 3),
+  ('agent', 'Agent', 'Partner access', '["dashboard.view","schedules.view","prices.view","bookings.view","bookings.manage","notifications.view"]'::jsonb, 'active', 4)
+on conflict (code) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  permissions = excluded.permissions,
+  status = excluded.status,
+  sort_order = excluded.sort_order;
+
 insert into public.users(id, full_name, phone, email, password, status)
 values
   ('10000000-0000-0000-0000-000000000001', 'Demo Customer One', '0811111111', 'demo.customer1@example.com', '12345678', 'active'),
@@ -19,17 +33,38 @@ set
   password = excluded.password,
   status = excluded.status;
 
-insert into public.admin_users(id, name, email, password, role, status)
+insert into public.agents(id, agent_code, name, company_name, contact_name, email, phone, payment_terms_days, credit_limit, status, contract_notes, address)
 values
-  ('11000000-0000-0000-0000-000000000001', 'System Admin', 'admin@example.com', 'admin123456', 'admin', 'active'),
-  ('11000000-0000-0000-0000-000000000002', 'Ticket Staff', 'staff@example.com', 'admin123456', 'staff', 'active'),
-  ('11000000-0000-0000-0000-000000000003', 'Inactive Staff', 'inactive.staff@example.com', 'admin123456', 'staff', 'inactive')
+  ('12000000-0000-0000-0000-000000000001', 'AGTDEMO001', 'Island Travel Agent', 'Island Travel Co., Ltd.', 'Agent Manager', 'agent.demo@example.com', '0855555555', 15, 50000.00, 'active', 'Standard reseller terms', 'Phuket'),
+  ('12000000-0000-0000-0000-000000000002', 'AGTDEMO002', 'Sea Partner', 'Sea Partner Co., Ltd.', 'Sales Lead', 'agent.partner@example.com', '0866666666', 30, 100000.00, 'active', 'Priority partner', 'Krabi')
+on conflict (agent_code) do update
+set
+  name = excluded.name,
+  company_name = excluded.company_name,
+  contact_name = excluded.contact_name,
+  email = excluded.email,
+  phone = excluded.phone,
+  payment_terms_days = excluded.payment_terms_days,
+  credit_limit = excluded.credit_limit,
+  status = excluded.status,
+  contract_notes = excluded.contract_notes,
+  address = excluded.address;
+
+insert into public.admin_users(id, name, username, phone, email, password, role, status, agent_id)
+values
+  ('11000000-0000-0000-0000-000000000001', 'System Admin', 'sysadmin', '0890000001', 'admin@example.com', 'admin123456', 'admin', 'active', null),
+  ('11000000-0000-0000-0000-000000000002', 'Ticket Staff', 'ticketstaff', '0890000002', 'staff@example.com', 'admin123456', 'staff', 'active', null),
+  ('11000000-0000-0000-0000-000000000003', 'Inactive Staff', 'inactive.staff', '0890000003', 'inactive.staff@example.com', 'admin123456', 'staff', 'inactive', null),
+  ('11000000-0000-0000-0000-000000000004', 'Demo Agent Login', 'agentdemo', '0890000004', 'agent.login@example.com', 'admin123456', 'agent', 'active', '12000000-0000-0000-0000-000000000001')
 on conflict (email) do update
 set
   name = excluded.name,
+  username = excluded.username,
+  phone = excluded.phone,
   password = excluded.password,
   role = excluded.role,
-  status = excluded.status;
+  status = excluded.status,
+  agent_id = excluded.agent_id;
 
 insert into public.ticket_types(name_th, code, price, description, benefit_text, status)
 values
@@ -79,7 +114,10 @@ insert into public.schedules(
   vessel_id,
   capacity,
   available_seats,
-  status
+  status,
+  route_name,
+  origin_port,
+  destination_port
 )
 select
   'TEST-' || to_char(d.trip_date, 'YYYYMMDD') || '-' || to_char(t.departure_time, 'HH24MI'),
@@ -89,7 +127,10 @@ select
   t.vessel_id,
   t.capacity,
   t.capacity,
-  'open'
+  'open',
+  'Main Pier - Island Pier',
+  'Main Pier',
+  'Island Pier'
 from schedule_days d
 cross join schedule_times t
 on conflict (schedule_code) do update
@@ -100,7 +141,24 @@ set
   vessel_id = excluded.vessel_id,
   capacity = excluded.capacity,
   available_seats = excluded.available_seats,
-  status = excluded.status;
+  status = excluded.status,
+  route_name = excluded.route_name,
+  origin_port = excluded.origin_port,
+  destination_port = excluded.destination_port;
+
+insert into public.ticket_price_rules(route_name, schedule_id, ticket_type_id, price, season_name, valid_from, valid_to, version_no, priority, status)
+values
+  ('Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'ADULT'), 120.00, 'Default', date '2026-03-01', date '2026-12-31', 1, 10, 'active'),
+  ('Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'CHILD'), 80.00, 'Default', date '2026-03-01', date '2026-12-31', 1, 10, 'active'),
+  ('Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'VIP'), 250.00, 'Default', date '2026-03-01', date '2026-12-31', 1, 10, 'active')
+on conflict do nothing;
+
+insert into public.agent_price_rules(agent_id, route_name, schedule_id, ticket_type_id, price, discount_amount, valid_from, valid_to, priority, status)
+values
+  ((select id from public.agents where agent_code = 'AGTDEMO001'), 'Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'ADULT'), 100.00, 0, date '2026-03-01', date '2026-12-31', 10, 'active'),
+  ((select id from public.agents where agent_code = 'AGTDEMO001'), 'Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'CHILD'), 70.00, 0, date '2026-03-01', date '2026-12-31', 10, 'active'),
+  ((select id from public.agents where agent_code = 'AGTDEMO002'), 'Main Pier - Island Pier', null, (select id from public.ticket_types where code = 'VIP'), null, 30.00, date '2026-03-01', date '2026-12-31', 10, 'active')
+on conflict do nothing;
 
 insert into public.bookings(
   id,

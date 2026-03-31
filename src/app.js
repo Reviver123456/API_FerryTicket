@@ -9,12 +9,14 @@ import ticketRoutes from './routes/ticket.routes.js';
 import ticketTypeRoutes from './routes/ticketType.routes.js';
 import gateRoutes from './routes/gate.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import { ok } from './utils/http.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { env } from './config/env.js';
 import { requestContext } from './middleware/requestContext.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
 import { supabase } from './config/supabase.js';
+import { buildOpenApiDocument, swaggerUiHtml } from './docs/openapi.js';
 
 export const app = express();
 
@@ -61,9 +63,20 @@ app.get('/', (req, res) => ok(res, {
     'POST /api/payments',
     'POST /api/payments/webhook/callback',
     'GET /api/tickets/booking/:bookingNo',
-    'POST /api/gate/validate'
+    'POST /api/gate/validate',
+    'POST /api/admin/auth/login',
+    'GET /api/admin/dashboard',
+    'GET /docs',
+    'GET /docs/openapi.json'
   ]
 }));
+
+app.get('/docs/openapi.json', (req, res) => {
+  const serverUrl = `${req.protocol}://${req.get('host')}`;
+  return res.json(buildOpenApiDocument(serverUrl));
+});
+
+app.get('/docs', (req, res) => res.type('html').send(swaggerUiHtml));
 
 app.get('/health', async (req, res, next) => {
   try {
@@ -88,5 +101,6 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/gate', gateRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use(errorHandler);

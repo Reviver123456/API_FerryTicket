@@ -28,6 +28,15 @@ export const normalizeOptionalString = (value, options = {}) => {
   return normalizeString(value, { ...options, required: false });
 };
 
+export const normalizeBoolean = (value, field = 'value', fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = normalizeString(String(value), { field, min: 1, max: 10 }).toLowerCase();
+  assert(['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(normalized), `${field} is invalid`);
+  return ['true', '1', 'yes', 'on'].includes(normalized);
+};
+
 export const normalizeEmail = (value, { required = true } = {}) => {
   const email = required
     ? normalizeString(value, { field: 'email', min: 5, max: 255 })
@@ -75,6 +84,51 @@ export const normalizeUuidish = (value, field) => {
   return normalized;
 };
 
+export const normalizeOptionalUuidish = (value, field) => {
+  if (value === undefined || value === null || value === '') return null;
+  return normalizeUuidish(value, field);
+};
+
 export const assertNonEmptyArray = (value, field) => {
   assert(Array.isArray(value) && value.length > 0, `${field} must be a non-empty array`);
+};
+
+export const normalizeDateString = (value, field = 'date', { required = false } = {}) => {
+  const normalized = required
+    ? normalizeString(value, { field, min: 10, max: 10 })
+    : normalizeOptionalString(value, { field, min: 10, max: 10 });
+
+  if (!normalized) return null;
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(normalized), `${field} must be YYYY-MM-DD`);
+  return normalized;
+};
+
+export const normalizeDateTimeString = (value, field = 'datetime', { required = false } = {}) => {
+  const normalized = required
+    ? normalizeString(value, { field, min: 16, max: 50 })
+    : normalizeOptionalString(value, { field, min: 16, max: 50 });
+
+  if (!normalized) return null;
+  const timestamp = Date.parse(normalized);
+  assert(Number.isFinite(timestamp), `${field} is invalid`);
+  return new Date(timestamp).toISOString();
+};
+
+export const normalizeTimeString = (value, field = 'time', { required = true } = {}) => {
+  const normalized = required
+    ? normalizeString(value, { field, min: 5, max: 8 })
+    : normalizeOptionalString(value, { field, min: 5, max: 8 });
+
+  if (!normalized) return null;
+  assert(/^\d{2}:\d{2}(:\d{2})?$/.test(normalized), `${field} must be HH:MM or HH:MM:SS`);
+  return normalized.length === 5 ? `${normalized}:00` : normalized;
+};
+
+export const normalizeJsonArrayOfStrings = (value, field = 'permissions') => {
+  assert(Array.isArray(value), `${field} must be an array`);
+  return value.map((item, index) => normalizeString(item, {
+    field: `${field}[${index}]`,
+    min: 1,
+    max: 120
+  }));
 };

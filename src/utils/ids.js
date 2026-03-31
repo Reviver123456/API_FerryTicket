@@ -8,3 +8,4 @@ export const generatePaymentRef = () => `PAY${alphaNum()}`;
 export const generateTicketNo = () => `TK${alphaNum()}`;
 export const generateScanCode = () => `SC${alphaNum(16)}`;
 export const generateScheduleCode = () => `SCH${digit6()}`;
+export const generateAgentCode = () => `AG${alphaNum()}`;

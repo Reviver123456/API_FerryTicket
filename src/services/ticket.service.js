@@ -47,17 +47,6 @@ export const issueTicketsForBooking = async (bookingId) => {
     .select('*');
 
   throwIfError(ticketError);
-
-  const usedSeats = booking.passengers.length;
-  const newAvailableSeats = Math.max(0, Number(booking.schedules.available_seats) - usedSeats);
-
-  const { error: scheduleError } = await supabase
-    .from('schedules')
-    .update({ available_seats: newAvailableSeats })
-    .eq('id', booking.schedule_id);
-
-  throwIfError(scheduleError);
-
   return inserted;
 };
 

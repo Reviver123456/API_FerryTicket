@@ -1,11 +1,18 @@
 import { supabase } from '../config/supabase.js';
 import { env } from '../config/env.js';
-import { signToken } from '../utils/auth.js';
 import { throwIfError, assert } from './base.service.js';
-import { hashPassword, needsPasswordRehash, verifyPassword } from '../utils/password.js';
+import { verifyPassword } from '../utils/password.js';
 import { normalizeEmail, normalizePhone, normalizeString } from '../utils/validation.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { nanoid } from 'nanoid';
+import {
+  createAuthIdentity,
+  findAuthIdentityByEmail,
+  linkAuthIdentityToLocalRecord,
+  signInWithSupabasePassword,
+  SUPABASE_AUTH_PLACEHOLDER,
+  updateAuthIdentityPassword
+} from './supabaseAuth.service.js';
 
 const PUBLIC_USER_COLUMNS = 'id, full_name, phone, email, profile_image_url, status, created_at, updated_at';
 const PROFILE_IMAGE_MIME_TYPES = {
@@ -17,9 +24,49 @@ const PROFILE_IMAGE_MIME_TYPES = {
 
 let profileBucketReady = false;
 
-const sanitizeUser = ({ password, ...user }) => user;
+const sanitizeUser = ({ password, auth_user_id, ...user }) => user;
 
 const hashResetToken = (token) => createHash('sha256').update(token).digest('hex');
+
+const buildAuthResponse = (user, session) => ({
+  user: sanitizeUser(user),
+  token: session.access_token,
+  refresh_token: session.refresh_token,
+  session: {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_in: session.expires_in,
+    expires_at: session.expires_at,
+    token_type: session.token_type
+  }
+});
+
+const ensureCustomerAuthIdentity = async (user, password) => {
+  let authUser = user.auth_user_id
+    ? { id: user.auth_user_id, email: user.email }
+    : await createAuthIdentity({
+      email: user.email,
+      password,
+      scope: 'customer',
+      metadata: {
+        local_user_id: user.id
+      }
+    });
+
+  if (!authUser) {
+    authUser = await findAuthIdentityByEmail(user.email);
+  }
+
+  assert(authUser, 'Unable to provision authentication account', 500);
+  await updateAuthIdentityPassword(authUser.id, password);
+  await linkAuthIdentityToLocalRecord({
+    table: 'users',
+    localId: user.id,
+    authUserId: authUser.id
+  });
+
+  return authUser;
+};
 
 const ensureProfileImageBucket = async () => {
   if (profileBucketReady) return;
@@ -91,24 +138,33 @@ export const registerUser = async ({ full_name, phone, email, password }) => {
   throwIfError(existingError);
   assert(!existing, 'Email already exists', 409);
 
-  const passwordHash = await hashPassword(normalizedUser.password);
+  const authUser = await createAuthIdentity({
+    email: normalizedUser.email,
+    password: normalizedUser.password,
+    scope: 'customer'
+  });
+  assert(authUser, 'Email already exists', 409);
+
   const { data, error } = await supabase
     .from('users')
     .insert([{
       full_name: normalizedUser.full_name,
       phone: normalizedUser.phone,
       email: normalizedUser.email,
-      password: passwordHash
+      password: SUPABASE_AUTH_PLACEHOLDER,
+      auth_user_id: authUser.id
     }])
     .select(PUBLIC_USER_COLUMNS)
     .single();
 
   throwIfError(error);
 
-  return {
-    user: sanitizeUser(data),
-    token: signToken({ sub: data.id, email: data.email, role: 'customer' })
-  };
+  const authSession = await signInWithSupabasePassword({
+    email: normalizedUser.email,
+    password: normalizedUser.password
+  });
+
+  return buildAuthResponse(data, authSession.session);
 };
 
 export const loginUser = async ({ email, password }) => {
@@ -122,7 +178,7 @@ export const loginUser = async ({ email, password }) => {
 
   const { data, error } = await supabase
     .from('users')
-    .select(`${PUBLIC_USER_COLUMNS}, password`)
+    .select(`${PUBLIC_USER_COLUMNS}, password, auth_user_id`)
     .eq('email', normalizedEmail)
     .maybeSingle();
 
@@ -130,23 +186,35 @@ export const loginUser = async ({ email, password }) => {
   assert(data, 'Invalid email or password', 401);
   assert(data.status === 'active', 'User account is not active', 403);
 
+  if (data.auth_user_id || data.password === SUPABASE_AUTH_PLACEHOLDER) {
+    if (!data.auth_user_id) {
+      const authUser = await findAuthIdentityByEmail(data.email);
+      assert(authUser, 'Authentication account is not linked correctly', 500);
+      await linkAuthIdentityToLocalRecord({
+        table: 'users',
+        localId: data.id,
+        authUserId: authUser.id
+      });
+    }
+
+    const authSession = await signInWithSupabasePassword({
+      email: data.email,
+      password: normalizedPassword
+    });
+
+    return buildAuthResponse(data, authSession.session);
+  }
+
   const isValidPassword = await verifyPassword(normalizedPassword, data.password);
   assert(isValidPassword, 'Invalid email or password', 401);
 
-  if (needsPasswordRehash(data.password)) {
-    const upgradedPassword = await hashPassword(normalizedPassword);
-    const { error: upgradeError } = await supabase
-      .from('users')
-      .update({ password: upgradedPassword })
-      .eq('id', data.id);
+  await ensureCustomerAuthIdentity(data, normalizedPassword);
+  const authSession = await signInWithSupabasePassword({
+    email: data.email,
+    password: normalizedPassword
+  });
 
-    throwIfError(upgradeError);
-  }
-
-  return {
-    user: sanitizeUser(data),
-    token: signToken({ sub: data.id, email: data.email, role: 'customer' })
-  };
+  return buildAuthResponse(data, authSession.session);
 };
 
 export const getMe = async (userId) => {
@@ -240,22 +308,15 @@ export const resetPassword = async ({ token, new_password }) => {
 
   const { data: user, error: userError } = await supabase
     .from('users')
-    .select('id, status')
+    .select('id, email, status, auth_user_id')
     .eq('id', resetRequest.user_id)
     .single();
 
   throwIfError(userError);
   assert(user.status === 'active', 'User account is not active', 403);
 
-  const passwordHash = await hashPassword(normalizedPassword);
+  await ensureCustomerAuthIdentity(user, normalizedPassword);
   const now = new Date().toISOString();
-
-  const { error: passwordError } = await supabase
-    .from('users')
-    .update({ password: passwordHash })
-    .eq('id', user.id);
-
-  throwIfError(passwordError);
 
   const { error: markUsedError } = await supabase
     .from('password_reset_tokens')
