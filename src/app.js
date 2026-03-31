@@ -35,9 +35,37 @@ const corsOptions = {
   }
 };
 
+const defaultHelmet = helmet();
+const docsHelmet = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+      imgSrc: ["'self'", 'data:', 'https://unpkg.com'],
+      fontSrc: ["'self'", 'data:', 'https://unpkg.com'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+});
+
 app.use(requestContext);
-app.use(helmet());
-app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  if (req.path === '/docs' || req.path === '/docs/openapi.json') {
+    return docsHelmet(req, res, next);
+  }
+  return defaultHelmet(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path === '/docs/openapi.json') {
+    return cors()(req, res, next);
+  }
+  return cors(corsOptions)(req, res, next);
+});
 app.use(express.json({ limit: env.jsonBodyLimit }));
 app.use(createRateLimiter({
   keyPrefix: 'global',
@@ -73,6 +101,7 @@ app.get('/', (req, res) => ok(res, {
 
 app.get('/docs/openapi.json', (req, res) => {
   const serverUrl = `${req.protocol}://${req.get('host')}`;
+  res.set('Access-Control-Allow-Origin', '*');
   return res.json(buildOpenApiDocument(serverUrl));
 });
 
