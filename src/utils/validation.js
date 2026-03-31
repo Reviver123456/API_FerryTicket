@@ -72,12 +72,6 @@ export const normalizeNonNegativeNumber = (value, field) => {
   return normalized;
 };
 
-export const normalizeEnum = (value, allowedValues, field) => {
-  const normalized = normalizeString(value, { field });
-  assert(allowedValues.includes(normalized), `${field} is invalid`);
-  return normalized;
-};
-
 export const normalizeUuidish = (value, field) => {
   const normalized = normalizeString(value, { field, min: 8, max: 64 });
   assert(UUIDISH_REGEX.test(normalized), `${field} is invalid`);
@@ -101,17 +95,6 @@ export const normalizeDateString = (value, field = 'date', { required = false } 
   if (!normalized) return null;
   assert(/^\d{4}-\d{2}-\d{2}$/.test(normalized), `${field} must be YYYY-MM-DD`);
   return normalized;
-};
-
-export const normalizeDateTimeString = (value, field = 'datetime', { required = false } = {}) => {
-  const normalized = required
-    ? normalizeString(value, { field, min: 16, max: 50 })
-    : normalizeOptionalString(value, { field, min: 16, max: 50 });
-
-  if (!normalized) return null;
-  const timestamp = Date.parse(normalized);
-  assert(Number.isFinite(timestamp), `${field} is invalid`);
-  return new Date(timestamp).toISOString();
 };
 
 export const normalizeTimeString = (value, field = 'time', { required = true } = {}) => {

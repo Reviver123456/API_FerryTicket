@@ -1,8 +1,15 @@
 import { Router } from 'express';
-import { byBooking, resend } from '../controllers/ticket.controller.js';
-import { internalApiKeyRequired } from '../middleware/internalAuth.js';
+import {
+  index,
+  resend,
+  show
+} from '../controllers/ticket.controller.js';
+import { authOptional, authRequired } from '../middleware/authMiddleware.js';
 
 const router = Router();
-router.get('/booking/:bookingNo', byBooking);
-router.post('/resend', internalApiKeyRequired, resend);
+
+router.get('/', authRequired, index);
+router.get('/:ticketNo', authOptional, show);
+router.post('/resend', authOptional, resend);
+
 export default router;

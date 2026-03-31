@@ -92,27 +92,18 @@ export const updateAuthIdentityPassword = async (authUserId, password) => update
   email_confirm: true
 });
 
-export const ensureAuthSession = async ({
-  email,
-  password,
-  scope = 'customer',
-  metadata = {}
-}) => {
-  await createAuthIdentity({ email, password, scope, metadata });
-  return signInWithSupabasePassword({ email, password });
-};
-
 export const linkAuthIdentityToLocalRecord = async ({
-  table,
   localId,
   authUserId
 }) => {
-  assert(['users', 'admin_users'].includes(table), 'table is invalid');
+  assert(localId, 'localId is required');
+  assert(authUserId, 'authUserId is required');
+
   const { error } = await supabaseAdmin
-    .from(table)
+    .from('users')
     .update({
       auth_user_id: authUserId,
-      password: SUPABASE_AUTH_PLACEHOLDER
+      password_hash: SUPABASE_AUTH_PLACEHOLDER
     })
     .eq('id', localId);
 

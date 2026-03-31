@@ -7,28 +7,22 @@
 - QR E-Ticket
 - Booking Draft / Hold Seat
 - Payment Mock Webhook
-- Gate Validation
 - Notification Log
 
 ## ฟีเจอร์หลัก
-- สมัครสมาชิก / login
+- สมัครสมาชิก / login ด้วย auth ชุดเดียว
 - ลืมรหัสผ่าน / reset password
 - อัปโหลดรูปโปรไฟล์
+- ระบบ users / roles / permissions แบบรวม
 - ค้นหารอบเรือ
 - สร้าง booking draft
-- บันทึกข้อมูลผู้จองและผู้โดยสาร
+- บันทึกข้อมูลผู้จองและผู้โดยสารผ่าน booking + passengers
 - สร้าง payment transaction
 - รับ webhook จาก payment gateway
 - ออกตั๋วและ QR code อัตโนมัติเมื่อจ่ายสำเร็จ
-- เปิดดู My Ticket
-- สแกน Gate เพื่อใช้งานตั๋ว
-- บันทึก notification และ gate logs
-- Admin login / permission-based access control
-- Admin dashboard / schedule management / ticket type management
-- Standard pricing / Agent pricing
-- Booking list / booking detail / reschedule / cancel / refund
-- Walk-in POS sale
-- Payment admin / reports / users / roles / agents / notifications / settings
+- ดูรายการ booking / payment / ticket แบบใช้สิทธิ์จาก role
+- Dashboard / reports / POS / agents / settings
+- Notifications ผ่าน user API และ internal API
 
 ## โครงสร้างโปรเจกต์
 ```
@@ -62,7 +56,6 @@ npm run dev
    - `PAYMENT_WEBHOOK_SECRET`
    - `INTERNAL_API_KEY`
    - `PASSWORD_RESET_URL` (optional)
-   - `ADMIN_PASSWORD_RESET_URL` (optional)
    - `PASSWORD_RESET_EXPIRES_MINUTES` (optional)
    - `PROFILE_IMAGE_BUCKET` (optional)
    - `PROFILE_IMAGE_MAX_BYTES` (optional)
@@ -72,7 +65,7 @@ npm run dev
 
 ## สำหรับ Production
 - password local แบบเดิมจะถูก hash ด้วย `scrypt` ระหว่างช่วง migrate
-- customer/admin login จะออก `token` จาก Supabase Auth
+- ทุก user type จะออก `token` จาก Supabase Auth ชุดเดียว
 - route ภายในต้องส่ง `x-internal-api-key`
 - payment webhook ต้องส่ง `x-webhook-secret`
 - CORS จะใช้ allowlist จาก `CORS_ORIGINS`
@@ -97,10 +90,11 @@ npm run smoke
 curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "full_name": "Biza Demo",
+    "first_name": "Biza",
+    "last_name": "Demo",
     "phone": "0812345678",
     "email": "biza@example.com",
-    "password": "123456"
+    "password": "12345678"
   }'
 ```
 
@@ -142,11 +136,10 @@ curl -X POST http://localhost:3000/api/auth/reset-password \
 
 ### 3.3) Upload profile image
 ```bash
-curl -X POST http://localhost:3000/api/auth/profile/image \
+curl -X POST http://localhost:3000/api/auth/me/profile-image \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
-    "file_name": "avatar.png",
     "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
   }'
 ```
@@ -166,8 +159,7 @@ curl -X POST http://localhost:3000/api/bookings/draft \
     "items": [
       {
         "ticket_type_id": "TICKET_TYPE_UUID",
-        "quantity": 2,
-        "unit_price": 120
+        "quantity": 2
       }
     ]
   }'
@@ -184,10 +176,20 @@ curl -X POST http://localhost:3000/api/bookings/draft \
 ```bash
 curl -X PUT http://localhost:3000/api/bookings/BKXXXXXXXXXX \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "contact_name": "Biza Demo",
     "contact_phone": "0812345678",
-    "contact_email": "biza@example.com",
+    "contact_email": "biza@example.com"
+  }'
+```
+
+### 7) Update booking passengers
+```bash
+curl -X PUT http://localhost:3000/api/bookings/BKXXXXXXXXXX/passengers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
     "passengers": [
       { "full_name": "Passenger 1", "passenger_type": "adult" },
       { "full_name": "Passenger 2", "passenger_type": "adult" }
@@ -195,10 +197,11 @@ curl -X PUT http://localhost:3000/api/bookings/BKXXXXXXXXXX \
   }'
 ```
 
-### 7) Create payment
+### 8) Create payment
 ```bash
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "booking_no": "BKXXXXXXXXXX",
     "contact_email": "biza@example.com",
@@ -206,7 +209,7 @@ curl -X POST http://localhost:3000/api/payments \
   }'
 ```
 
-### 8) Mock payment webhook success
+### 9) Mock payment webhook success
 ```bash
 curl -X POST http://localhost:3000/api/payments/webhook/callback \
   -H "Content-Type: application/json" \
@@ -219,62 +222,82 @@ curl -X POST http://localhost:3000/api/payments/webhook/callback \
   }'
 ```
 
-### 9) Get tickets by booking
+### 10) Get tickets by booking
 ```bash
-curl "http://localhost:3000/api/tickets/booking/BKXXXXXXXXXX?contact_email=biza@example.com"
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  "http://localhost:3000/api/tickets?bookingNo=BKXXXXXXXXXX"
 ```
 
-### 10) Validate gate scan
+### 11) List my bookings
 ```bash
-curl -X POST http://localhost:3000/api/gate/validate \
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  "http://localhost:3000/api/bookings"
+```
+
+## API Surface หลัก
+
+- `GET /`
+- `GET /health`
+- `GET /docs`
+- `GET /docs/openapi.json`
+- `POST|GET|PUT /api/auth/*`
+- `GET|POST|PUT /api/roles`
+- `GET /api/permissions`
+- `GET|POST|PUT /api/ticket-types`
+- `GET|POST|PUT /api/schedules`
+- `POST /api/schedules/:id/open-sales`
+- `POST /api/schedules/:id/close-sales`
+- `POST /api/schedules/:id/cancel`
+- `GET|POST|PUT /api/prices`
+- `GET /api/prices/preview`
+- `POST /api/bookings/draft`
+- `GET|PUT /api/bookings/:bookingNo`
+- `GET|PUT /api/bookings/:bookingNo/passengers`
+- `POST /api/bookings/:bookingNo/cancel`
+- `POST /api/bookings/:bookingNo/change-schedule`
+- `POST /api/bookings/:bookingNo/mark-paid`
+- `POST /api/bookings/:bookingNo/resend-tickets`
+- `POST /api/bookings/:bookingNo/refund`
+- `POST /api/bookings/jobs/expire-stale`
+- `POST|GET /api/payments`
+- `GET /api/payments/:paymentRef`
+- `POST /api/payments/:paymentRef/confirm`
+- `POST /api/payments/:paymentRef/refund`
+- `POST /api/payments/webhook/callback`
+- `GET /api/tickets`
+- `GET /api/tickets/:ticketNo`
+- `POST /api/tickets/resend`
+- `GET|POST /api/notifications`
+- `POST /api/notifications/:id/read`
+- `GET /api/dashboard`
+- `GET /api/reports/sales`
+- `GET /api/reports/passengers`
+- `POST|GET /api/pos/sales`
+- `GET /api/pos/sales/:id`
+- `GET|POST|PUT /api/agents`
+- `GET /api/agents/:id/sales`
+- `GET|PUT /api/settings`
+- `GET /api/settings/export`
+- `POST /api/settings/import`
+- `GET|POST /api/users`
+- `GET|PUT /api/users/:id`
+- `POST /api/users/:id/reset-password`
+
+ตัวอย่าง login ผู้ใช้ที่มีสิทธิ์ admin/staff:
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -H "x-internal-api-key: ${INTERNAL_API_KEY}" \
   -d '{
-    "qr_token": "SCXXXXXXXXXXXXXX",
-    "gate_code": "GATE-A",
-    "device_code": "SCANNER-01"
+    "email": "admin@example.com",
+    "password": "admin123456"
   }'
 ```
 
-## Admin API
-
-ตัวอย่าง route หลักฝั่ง admin:
-
-- `POST /api/admin/auth/login`
-- `GET /api/admin/auth/me`
-- `GET /api/admin/dashboard`
-- `GET|POST|PUT /api/admin/schedules`
-- `GET|POST|PUT /api/admin/ticket-types`
-- `GET|POST|PUT /api/admin/prices/standard`
-- `GET|POST|PUT /api/admin/prices/agent`
-- `GET|PUT /api/admin/bookings`
-- `POST /api/admin/pos/sales`
-- `POST /api/admin/gate/scan`
-- `GET|POST /api/admin/payments`
-- `GET /api/admin/reports/sales`
-- `GET /api/admin/reports/passengers`
-- `GET|POST|PUT /api/admin/users`
-- `GET|POST|PUT /api/admin/roles`
-- `GET|POST|PUT /api/admin/agents`
-- `GET|POST /api/admin/notifications`
-- `GET|PUT /api/admin/settings`
-
-ตัวอย่าง admin login:
+ตัวอย่างสร้างรอบเรือ:
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username_or_email": "admin@example.com",
-    "password": "admin123456",
-    "remember_me": true
-  }'
-```
-
-ตัวอย่างสร้างรอบเรือฝั่ง admin:
-
-```bash
-curl -X POST http://localhost:3000/api/admin/schedules \
+curl -X POST http://localhost:3000/api/schedules \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
   -d '{
@@ -292,15 +315,15 @@ curl -X POST http://localhost:3000/api/admin/schedules \
 ตัวอย่างขายตั๋ว Walk-in:
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/pos/sales \
+curl -X POST http://localhost:3000/api/pos/sales \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
   -d '{
     "schedule_id": "SCHEDULE_UUID",
     "contact_name": "Walk-in Customer",
+    "contact_email": "walkin@example.com",
     "contact_phone": "0812345678",
     "payment_method": "cash",
-    "mark_paid": true,
     "items": [
       {
         "ticket_type_id": "TICKET_TYPE_UUID",
@@ -326,14 +349,13 @@ curl -X POST http://localhost:3000/api/admin/pos/sales \
 - `pending`
 - `success`
 - `failed`
-- `expired`
 - `refunded`
 
 ### Ticket Status
-- `active`
+- `unused`
 - `used`
 - `cancelled`
-- `expired`
+- `refunded`
 
 ## ข้อควรรู้
 - เวอร์ชันนี้เป็น Full System สำหรับเริ่มต้นใช้งานและต่อยอดจริงได้

@@ -2,9 +2,11 @@ import { Router } from 'express';
 import {
   forgotPassword,
   login,
+  logout,
   me,
   register,
   resetPasswordByToken,
+  updateProfile,
   updateProfileImage
 } from '../controllers/auth.controller.js';
 import { authRequired } from '../middleware/authMiddleware.js';
@@ -24,6 +26,8 @@ router.post('/login', authRateLimit, login);
 router.post('/forgot-password', authRateLimit, forgotPassword);
 router.post('/reset-password', authRateLimit, resetPasswordByToken);
 router.get('/me', authRequired, me);
-router.post('/profile/image', authRequired, updateProfileImage);
+router.put('/me', authRequired, updateProfile);
+router.post('/me/profile-image', authRequired, updateProfileImage);
+router.post('/logout', authRequired, logout);
 
 export default router;

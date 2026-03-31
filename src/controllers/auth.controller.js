@@ -2,8 +2,10 @@ import {
   createPasswordResetRequest,
   getMe,
   loginUser,
+  logoutUser,
   registerUser,
   resetPassword,
+  updateMe,
   uploadProfileImage
 } from '../services/user.service.js';
 import { createHandler as handle } from '../utils/controller.js';
@@ -15,7 +17,11 @@ export const register = handle(registerUser, 'User registered', {
 export const login = handle(loginUser, 'Login successful');
 
 export const me = handle(getMe, 'Profile loaded', {
-  mapArgs: (req) => [req.user.sub]
+  mapArgs: (req) => [req.user.id]
+});
+
+export const updateProfile = handle(updateMe, 'Profile updated', {
+  mapArgs: (req) => [req.user.id, req.body]
 });
 
 export const forgotPassword = handle(createPasswordResetRequest, (data) => data.message, {
@@ -28,5 +34,9 @@ export const forgotPassword = handle(createPasswordResetRequest, (data) => data.
 export const resetPasswordByToken = handle(resetPassword, 'Password reset successful');
 
 export const updateProfileImage = handle(uploadProfileImage, 'Profile image updated', {
-  mapArgs: (req) => [req.user.sub, req.body]
+  mapArgs: (req) => [req.user.id, req.body]
+});
+
+export const logout = handle(logoutUser, 'Logout successful', {
+  mapArgs: () => []
 });

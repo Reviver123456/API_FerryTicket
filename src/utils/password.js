@@ -7,7 +7,7 @@ const HASH_KEY_LENGTH = 64;
 
 const toBuffer = (value) => Buffer.from(value, 'hex');
 
-export const isHashedPassword = (value = '') => value.startsWith(`${HASH_PREFIX}$`);
+const isHashedPassword = (value = '') => value.startsWith(`${HASH_PREFIX}$`);
 
 export const hashPassword = async (password) => {
   const salt = randomBytes(16).toString('hex');
@@ -32,5 +32,3 @@ export const verifyPassword = async (password, storedPassword) => {
   if (derivedBuffer.length !== storedBuffer.length) return false;
   return timingSafeEqual(derivedBuffer, storedBuffer);
 };
-
-export const needsPasswordRehash = (storedPassword) => !isHashedPassword(storedPassword);

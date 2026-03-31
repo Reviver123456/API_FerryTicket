@@ -12,10 +12,10 @@ const matchesSecret = (expected, actual) => {
   return timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
-export const internalApiKeyRequired = (req, res, next) => {
-  const providedKey = req.get('x-internal-api-key');
+export const hasValidInternalApiKey = (req) => matchesSecret(env.internalApiKey, req.get('x-internal-api-key'));
 
-  if (!matchesSecret(env.internalApiKey, providedKey)) {
+export const internalApiKeyRequired = (req, res, next) => {
+  if (!hasValidInternalApiKey(req)) {
     return fail(res, 'Unauthorized', 401);
   }
 

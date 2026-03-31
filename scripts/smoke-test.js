@@ -41,7 +41,8 @@ if (!scheduleId) throw new Error('No schedules available');
 await request('/api/auth/register', {
   method: 'POST',
   body: {
-    full_name: 'Smoke Test',
+    first_name: 'Smoke',
+    last_name: 'Test',
     phone: '0812345678',
     email,
     password
@@ -76,10 +77,22 @@ if (booking.user_id !== login.user.id) {
 
 await request(`/api/bookings/${booking.booking_no}`, {
   method: 'PUT',
+  headers: {
+    Authorization: `Bearer ${login.token}`
+  },
   body: {
     contact_name: 'Smoke Test',
     contact_phone: '0812345678',
-    contact_email: email,
+    contact_email: email
+  }
+});
+
+await request(`/api/bookings/${booking.booking_no}/passengers`, {
+  method: 'PUT',
+  headers: {
+    Authorization: `Bearer ${login.token}`
+  },
+  body: {
     passengers: [
       { full_name: 'Passenger 1', passenger_type: 'adult' },
       { full_name: 'Passenger 2', passenger_type: 'adult' }
@@ -89,6 +102,9 @@ await request(`/api/bookings/${booking.booking_no}`, {
 
 const payment = await request('/api/payments', {
   method: 'POST',
+  headers: {
+    Authorization: `Bearer ${login.token}`
+  },
   body: {
     booking_no: booking.booking_no,
     contact_email: email,
@@ -109,16 +125,17 @@ await request('/api/payments/webhook/callback', {
   }
 });
 
-const tickets = await request(`/api/tickets/booking/${booking.booking_no}?contact_email=${encodeURIComponent(email)}`);
-const gate = await request('/api/gate/validate', {
-  method: 'POST',
+const tickets = await request(`/api/tickets?bookingNo=${encodeURIComponent(booking.booking_no)}`, {
+  method: 'GET',
   headers: {
-    'x-internal-api-key': env.internalApiKey
-  },
-  body: {
-    qr_token: tickets[0].qr_token,
-    gate_code: 'GATE-A',
-    device_code: 'SMOKE-01'
+    Authorization: `Bearer ${login.token}`
+  }
+});
+
+const myBookings = await request('/api/bookings', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${login.token}`
   }
 });
 
@@ -126,5 +143,5 @@ console.log(JSON.stringify({
   booking_no: booking.booking_no,
   payment_ref: payment.payment_ref,
   tickets_issued: tickets.length,
-  gate_result: gate.result
+  booking_list_count: myBookings.length
 }, null, 2));

@@ -7,9 +7,14 @@ import bookingRoutes from './routes/booking.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import ticketRoutes from './routes/ticket.routes.js';
 import ticketTypeRoutes from './routes/ticketType.routes.js';
-import gateRoutes from './routes/gate.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
-import adminRoutes from './routes/admin.routes.js';
+import roleRoutes from './routes/role.routes.js';
+import priceRoutes from './routes/price.routes.js';
+import reportRoutes from './routes/report.routes.js';
+import posRoutes from './routes/pos.routes.js';
+import agentRoutes from './routes/agent.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import userRoutes from './routes/user.routes.js';
 import { ok } from './utils/http.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { env } from './config/env.js';
@@ -75,27 +80,41 @@ app.use(createRateLimiter({
 
 app.get('/', (req, res) => ok(res, {
   name: 'Ferry Ticketing API',
-  version: '1.0.0',
+  version: '2.0.0',
   endpoints: [
+    'GET /',
+    'GET /health',
+    'GET /docs',
+    'GET /docs/openapi.json',
     'POST /api/auth/register',
     'POST /api/auth/login',
     'POST /api/auth/forgot-password',
     'POST /api/auth/reset-password',
     'GET /api/auth/me',
-    'POST /api/auth/profile/image',
+    'PUT /api/auth/me',
+    'POST /api/auth/me/profile-image',
+    'POST /api/auth/logout',
+    'GET /api/roles',
+    'GET /api/permissions',
     'GET /api/ticket-types',
+    'POST /api/ticket-types',
     'GET /api/schedules',
+    'POST /api/schedules',
+    'GET /api/prices',
     'POST /api/bookings/draft',
-    'GET /api/bookings/my',
+    'GET /api/bookings',
     'PUT /api/bookings/:bookingNo',
     'POST /api/payments',
+    'GET /api/payments',
     'POST /api/payments/webhook/callback',
-    'GET /api/tickets/booking/:bookingNo',
-    'POST /api/gate/validate',
-    'POST /api/admin/auth/login',
-    'GET /api/admin/dashboard',
-    'GET /docs',
-    'GET /docs/openapi.json'
+    'GET /api/tickets',
+    'GET /api/notifications',
+    'GET /api/dashboard',
+    'GET /api/reports/sales',
+    'POST /api/pos/sales',
+    'GET /api/agents',
+    'GET /api/settings',
+    'GET /api/users'
   ]
 }));
 
@@ -123,13 +142,18 @@ app.get('/health', async (req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api', roleRoutes);
 app.use('/api/ticket-types', ticketTypeRoutes);
 app.use('/api/schedules', scheduleRoutes);
+app.use('/api/prices', priceRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/tickets', ticketRoutes);
-app.use('/api/gate', gateRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api', reportRoutes);
+app.use('/api/pos', posRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/users', userRoutes);
 
 app.use(errorHandler);
