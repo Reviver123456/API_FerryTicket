@@ -8,6 +8,7 @@ import { ensureScheduleAvailable, getScheduleById } from './schedule.service.js'
 import { hasPermission } from './access.service.js';
 import {
   assertNonEmptyArray,
+  normalizeDateString,
   normalizeEmail,
   normalizeNonNegativeNumber,
   normalizeOptionalString,

@@ -101,9 +101,16 @@ const buildAuthResponse = (user, session) => ({
 });
 
 const ensureUserAuthIdentity = async (user, password) => {
-  let authUser = user.auth_user_id
-    ? { id: user.auth_user_id, email: user.email }
-    : await createAuthIdentity({
+  let authUser = null;
+
+  if (user.auth_user_id) {
+    authUser = { id: user.auth_user_id, email: user.email };
+  } else {
+    authUser = await findAuthIdentityByEmail(user.email);
+  }
+
+  if (!authUser) {
+    authUser = await createAuthIdentity({
       email: user.email,
       password,
       scope: 'app_user',
@@ -112,6 +119,7 @@ const ensureUserAuthIdentity = async (user, password) => {
         user_type: user.user_type
       }
     });
+  }
 
   if (!authUser) {
     authUser = await findAuthIdentityByEmail(user.email);
