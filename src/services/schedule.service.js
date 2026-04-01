@@ -11,12 +11,13 @@ import {
 
 const SCHEDULE_COLUMNS = 'id, schedule_code, trip_date, departure_time, arrival_time, capacity, available_seats, status, route_name, origin_port, destination_port, cancelled_at, cancel_reason, vessel_id, boat_name, registration_no';
 
-const normalizeScheduleStatus = (status, { required = false } = {}) => {
+const normalizeScheduleStatus = (status, { required = false, allowAll = false } = {}) => {
   const normalized = required
     ? normalizeOptionalString(status || 'open', { field: 'status', min: 4, max: 20 }) || 'open'
-    : normalizeOptionalString(status, { field: 'status', min: 4, max: 20 });
+    : normalizeOptionalString(status, { field: 'status', min: allowAll ? 3 : 4, max: 20 });
 
   if (!normalized) return null;
+  if (allowAll && normalized === 'all') return normalized;
   assert(['open', 'closed', 'cancelled'].includes(normalized), 'status is invalid');
   return normalized;
 };
@@ -25,7 +26,7 @@ export const listSchedules = async (query = {}) => {
   const tripDate = normalizeDateString(query.trip_date || query.tripDate, 'trip_date', {
     required: false
   });
-  const status = normalizeScheduleStatus(query.status, { required: false });
+  const status = normalizeScheduleStatus(query.status, { required: false, allowAll: true });
 
   let builder = supabase
     .from('schedule_overview')
@@ -34,7 +35,7 @@ export const listSchedules = async (query = {}) => {
     .order('departure_time', { ascending: true });
 
   if (tripDate) builder = builder.eq('trip_date', tripDate);
-  if (status) builder = builder.eq('status', status);
+  if (status && status !== 'all') builder = builder.eq('status', status);
 
   const { data, error } = await builder;
   throwIfError(error);
