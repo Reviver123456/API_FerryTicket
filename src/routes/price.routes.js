@@ -10,7 +10,7 @@ import { authRequired, permissionRequired } from '../middleware/authMiddleware.j
 
 const router = Router();
 
-router.get('/preview', authRequired, permissionRequired('prices.view'), preview);
+router.get('/preview', preview);
 router.get('/', authRequired, permissionRequired('prices.view'), index);
 router.get('/:id', authRequired, permissionRequired('prices.view'), show);
 router.post('/', authRequired, permissionRequired('prices.manage'), create);
