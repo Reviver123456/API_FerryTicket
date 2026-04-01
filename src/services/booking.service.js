@@ -33,6 +33,14 @@ const sortBookings = (bookings = []) => [...bookings].sort(
 
 const isPrivilegedBookingUser = (actor) => hasPermission(actor, 'bookings.view');
 
+const normalizeOptionalLimit = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+
+  const normalized = Number(value);
+  assert(Number.isInteger(normalized) && normalized > 0, 'limit must be a positive integer');
+  return Math.min(normalized, 100);
+};
+
 const isBookingOwner = (booking, actor = null, contactEmail = null) => {
   if (actor && isPrivilegedBookingUser(actor)) return true;
   if (actor?.id && booking.user_id && actor.id === booking.user_id) return true;
@@ -123,16 +131,37 @@ const loadAgent = async (agentId) => {
   return data;
 };
 
-const hydrateBooking = async (booking) => {
+const safeLoadBookingRelation = async (booking, relation, fallback, loader) => {
+  try {
+    return await loader();
+  } catch (error) {
+    console.warn(`[booking.service] Failed to load ${relation} for booking ${booking.booking_no}: ${error.message}`);
+    return fallback;
+  }
+};
+
+const hydrateBooking = async (booking, { tolerant = false } = {}) => {
   if (!booking) return null;
 
   const [items, passengers, payments, tickets, schedule, agent] = await Promise.all([
-    loadBookingItems(booking.id),
-    loadBookingPassengersRows(booking.id),
-    loadBookingPayments(booking.id),
-    loadBookingTickets(booking.id),
-    loadBookingSchedule(booking.schedule_id),
-    loadAgent(booking.agent_id)
+    tolerant
+      ? safeLoadBookingRelation(booking, 'items', [], () => loadBookingItems(booking.id))
+      : loadBookingItems(booking.id),
+    tolerant
+      ? safeLoadBookingRelation(booking, 'passengers', [], () => loadBookingPassengersRows(booking.id))
+      : loadBookingPassengersRows(booking.id),
+    tolerant
+      ? safeLoadBookingRelation(booking, 'payments', [], () => loadBookingPayments(booking.id))
+      : loadBookingPayments(booking.id),
+    tolerant
+      ? safeLoadBookingRelation(booking, 'tickets', [], () => loadBookingTickets(booking.id))
+      : loadBookingTickets(booking.id),
+    tolerant
+      ? safeLoadBookingRelation(booking, 'schedule', null, () => loadBookingSchedule(booking.schedule_id))
+      : loadBookingSchedule(booking.schedule_id),
+    tolerant
+      ? safeLoadBookingRelation(booking, 'agent', null, () => loadAgent(booking.agent_id))
+      : loadAgent(booking.agent_id)
   ]);
 
   return {
@@ -359,6 +388,7 @@ export const listBookings = async (query = {}, actor) => {
     const dateFrom = normalizeDateString(query.dateFrom || query.date_from, 'dateFrom', { required: false });
     const dateTo = normalizeDateString(query.dateTo || query.date_to, 'dateTo', { required: false });
     const contactPhone = normalizePhone(query.contactPhone || query.contact_phone, { required: false });
+    const limit = normalizeOptionalLimit(query.limit);
 
     if (status) {
       builder = builder.or(`booking_status.eq.${status},payment_status.eq.${status}`);
@@ -367,6 +397,7 @@ export const listBookings = async (query = {}, actor) => {
     if (dateFrom) builder = builder.gte('created_at', `${dateFrom}T00:00:00.000Z`);
     if (dateTo) builder = builder.lte('created_at', `${dateTo}T23:59:59.999Z`);
     if (contactPhone) builder = builder.eq('contact_phone', contactPhone);
+    if (limit) builder = builder.limit(limit);
 
     const { data, error } = await builder;
     throwIfError(error);
@@ -375,7 +406,7 @@ export const listBookings = async (query = {}, actor) => {
     bookings = await loadBookingsForOwner(actor);
   }
 
-  return Promise.all(bookings.map(hydrateBooking));
+  return Promise.all(bookings.map((booking) => hydrateBooking(booking, { tolerant: true })));
 };
 
 export const getBookingByRef = async (bookingNo) => {
