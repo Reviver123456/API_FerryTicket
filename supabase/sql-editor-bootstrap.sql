@@ -10,6 +10,7 @@ drop table if exists public.booking_passengers cascade;
 drop table if exists public.booking_items cascade;
 drop table if exists public.bookings cascade;
 drop table if exists public.prices cascade;
+drop table if exists public.holiday_calendar cascade;
 drop table if exists public.schedules cascade;
 drop table if exists public.vessels cascade;
 drop table if exists public.ticket_types cascade;
@@ -153,6 +154,7 @@ create table public.schedules (
 create table public.prices (
   id uuid primary key default gen_random_uuid(),
   price_type text not null,
+  day_type text not null default 'all',
   ticket_type_id uuid not null references public.ticket_types(id) on delete cascade,
   agent_id uuid references public.agents(id) on delete set null,
   effective_from date not null,
@@ -165,6 +167,7 @@ create table public.prices (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint prices_price_type_valid check (price_type in ('standard', 'agent')),
+  constraint prices_day_type_valid check (day_type in ('all', 'weekday', 'weekend', 'holiday')),
   constraint prices_status_valid check (status in ('active', 'inactive')),
   constraint prices_amount_non_negative check (amount >= 0),
   constraint prices_agent_required check (
@@ -172,6 +175,16 @@ create table public.prices (
     or
     (price_type = 'agent' and agent_id is not null)
   )
+);
+
+create table public.holiday_calendar (
+  id uuid primary key default gen_random_uuid(),
+  holiday_date date not null unique,
+  name text not null,
+  description text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.bookings (
@@ -317,7 +330,8 @@ create index idx_agents_status on public.agents(status);
 create index idx_ticket_types_status on public.ticket_types(status);
 create index idx_schedules_trip_date on public.schedules(trip_date);
 create index idx_schedules_status on public.schedules(status);
-create index idx_prices_lookup on public.prices(ticket_type_id, price_type, status, effective_from, effective_to);
+create index idx_prices_lookup on public.prices(ticket_type_id, price_type, day_type, status, effective_from, effective_to);
+create index idx_holiday_calendar_date on public.holiday_calendar(holiday_date, is_active);
 create index idx_bookings_booking_no on public.bookings(booking_no);
 create index idx_bookings_user_id on public.bookings(user_id);
 create index idx_bookings_schedule_id on public.bookings(schedule_id);
@@ -350,6 +364,9 @@ create trigger set_schedules_updated_at before update on public.schedules
 for each row execute function public.set_updated_at();
 
 create trigger set_prices_updated_at before update on public.prices
+for each row execute function public.set_updated_at();
+
+create trigger set_holiday_calendar_updated_at before update on public.holiday_calendar
 for each row execute function public.set_updated_at();
 
 create trigger set_bookings_updated_at before update on public.bookings
@@ -740,9 +757,53 @@ set
   destination_port = excluded.destination_port,
   updated_at = now();
 
+insert into public.holiday_calendar(
+  id,
+  holiday_date,
+  name,
+  description,
+  is_active
+)
+values
+  (
+    '61000000-0000-0000-0000-000000000001',
+    date '2026-04-06',
+    'Chakri Memorial Day',
+    'Sample seeded public holiday',
+    true
+  ),
+  (
+    '61000000-0000-0000-0000-000000000002',
+    date '2026-04-13',
+    'Songkran Festival Day 1',
+    'Sample seeded public holiday',
+    true
+  ),
+  (
+    '61000000-0000-0000-0000-000000000003',
+    date '2026-04-14',
+    'Songkran Festival Day 2',
+    'Sample seeded public holiday',
+    true
+  ),
+  (
+    '61000000-0000-0000-0000-000000000004',
+    date '2026-04-15',
+    'Songkran Festival Day 3',
+    'Sample seeded public holiday',
+    true
+  )
+on conflict (holiday_date) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  is_active = excluded.is_active,
+  updated_at = now();
+
 insert into public.prices(
   id,
   price_type,
+  day_type,
   ticket_type_id,
   agent_id,
   effective_from,
@@ -757,6 +818,7 @@ values
   (
     '60000000-0000-0000-0000-000000000001',
     'standard',
+    'weekday',
     '40000000-0000-0000-0000-000000000001',
     null,
     date '2026-03-01',
@@ -770,6 +832,35 @@ values
   (
     '60000000-0000-0000-0000-000000000002',
     'standard',
+    'weekend',
+    '40000000-0000-0000-0000-000000000001',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    150.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000003',
+    'standard',
+    'holiday',
+    '40000000-0000-0000-0000-000000000001',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    180.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000004',
+    'standard',
+    'weekday',
     '40000000-0000-0000-0000-000000000002',
     null,
     date '2026-03-01',
@@ -781,8 +872,37 @@ values
     '10000000-0000-0000-0000-000000000003'
   ),
   (
-    '60000000-0000-0000-0000-000000000003',
+    '60000000-0000-0000-0000-000000000005',
     'standard',
+    'weekend',
+    '40000000-0000-0000-0000-000000000002',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    100.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000006',
+    'standard',
+    'holiday',
+    '40000000-0000-0000-0000-000000000002',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    120.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000007',
+    'standard',
+    'weekday',
     '40000000-0000-0000-0000-000000000003',
     null,
     date '2026-03-01',
@@ -794,8 +914,37 @@ values
     '10000000-0000-0000-0000-000000000003'
   ),
   (
-    '60000000-0000-0000-0000-000000000004',
+    '60000000-0000-0000-0000-000000000008',
+    'standard',
+    'weekend',
+    '40000000-0000-0000-0000-000000000003',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    300.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000009',
+    'standard',
+    'holiday',
+    '40000000-0000-0000-0000-000000000003',
+    null,
+    date '2026-03-01',
+    date '2026-12-31',
+    350.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000010',
     'agent',
+    'weekday',
     '40000000-0000-0000-0000-000000000001',
     '12000000-0000-0000-0000-000000000001',
     date '2026-03-01',
@@ -805,10 +954,39 @@ values
     'active',
     '10000000-0000-0000-0000-000000000003',
     '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000011',
+    'agent',
+    'weekend',
+    '40000000-0000-0000-0000-000000000001',
+    '12000000-0000-0000-0000-000000000001',
+    date '2026-03-01',
+    date '2026-12-31',
+    120.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
+  ),
+  (
+    '60000000-0000-0000-0000-000000000012',
+    'agent',
+    'holiday',
+    '40000000-0000-0000-0000-000000000001',
+    '12000000-0000-0000-0000-000000000001',
+    date '2026-03-01',
+    date '2026-12-31',
+    140.00,
+    'THB',
+    'active',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003'
   )
 on conflict (id) do update
 set
   price_type = excluded.price_type,
+  day_type = excluded.day_type,
   ticket_type_id = excluded.ticket_type_id,
   agent_id = excluded.agent_id,
   effective_from = excluded.effective_from,

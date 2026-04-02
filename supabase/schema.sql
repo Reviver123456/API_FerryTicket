@@ -10,6 +10,7 @@ drop table if exists public.booking_passengers cascade;
 drop table if exists public.booking_items cascade;
 drop table if exists public.bookings cascade;
 drop table if exists public.prices cascade;
+drop table if exists public.holiday_calendar cascade;
 drop table if exists public.schedules cascade;
 drop table if exists public.vessels cascade;
 drop table if exists public.ticket_types cascade;
@@ -153,6 +154,7 @@ create table public.schedules (
 create table public.prices (
   id uuid primary key default gen_random_uuid(),
   price_type text not null,
+  day_type text not null default 'all',
   ticket_type_id uuid not null references public.ticket_types(id) on delete cascade,
   agent_id uuid references public.agents(id) on delete set null,
   effective_from date not null,
@@ -165,6 +167,7 @@ create table public.prices (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint prices_price_type_valid check (price_type in ('standard', 'agent')),
+  constraint prices_day_type_valid check (day_type in ('all', 'weekday', 'weekend', 'holiday')),
   constraint prices_status_valid check (status in ('active', 'inactive')),
   constraint prices_amount_non_negative check (amount >= 0),
   constraint prices_agent_required check (
@@ -172,6 +175,16 @@ create table public.prices (
     or
     (price_type = 'agent' and agent_id is not null)
   )
+);
+
+create table public.holiday_calendar (
+  id uuid primary key default gen_random_uuid(),
+  holiday_date date not null unique,
+  name text not null,
+  description text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.bookings (
@@ -317,7 +330,8 @@ create index idx_agents_status on public.agents(status);
 create index idx_ticket_types_status on public.ticket_types(status);
 create index idx_schedules_trip_date on public.schedules(trip_date);
 create index idx_schedules_status on public.schedules(status);
-create index idx_prices_lookup on public.prices(ticket_type_id, price_type, status, effective_from, effective_to);
+create index idx_prices_lookup on public.prices(ticket_type_id, price_type, day_type, status, effective_from, effective_to);
+create index idx_holiday_calendar_date on public.holiday_calendar(holiday_date, is_active);
 create index idx_bookings_booking_no on public.bookings(booking_no);
 create index idx_bookings_user_id on public.bookings(user_id);
 create index idx_bookings_schedule_id on public.bookings(schedule_id);
@@ -350,6 +364,9 @@ create trigger set_schedules_updated_at before update on public.schedules
 for each row execute function public.set_updated_at();
 
 create trigger set_prices_updated_at before update on public.prices
+for each row execute function public.set_updated_at();
+
+create trigger set_holiday_calendar_updated_at before update on public.holiday_calendar
 for each row execute function public.set_updated_at();
 
 create trigger set_bookings_updated_at before update on public.bookings

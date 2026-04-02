@@ -274,6 +274,7 @@ const loadBookingsForOwner = async (actor) => {
 export const createBookingDraft = async (payload = {}, actor = null) => {
   const scheduleId = normalizeUuidish(payload.schedule_id, 'schedule_id');
   const agentId = normalizeOptionalUuidish(payload.agent_id, 'agent_id');
+  const schedule = await getScheduleById(scheduleId);
   const sourceChannel = normalizeString(payload.source_channel || 'web', {
     field: 'source_channel',
     min: 2,
@@ -294,7 +295,8 @@ export const createBookingDraft = async (payload = {}, actor = null) => {
     const pricing = manualUnitPrice === null
       ? await resolvePricePreview({
         ticket_type_id: ticketTypeId,
-        agent_id: agentId
+        agent_id: agentId,
+        effective_date: schedule.trip_date
       })
       : { amount: manualUnitPrice, currency: 'THB' };
 

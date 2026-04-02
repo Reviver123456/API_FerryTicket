@@ -250,6 +250,8 @@ curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
 - `POST /api/schedules/:id/cancel`
 - `GET|POST|PUT /api/prices`
 - `GET /api/prices/preview`
+- `prices.day_type` รองรับ `all | weekday | weekend | holiday`
+- ตาราง `holiday_calendar` ใช้ระบุวันนักขัตฤกษ์สำหรับการคำนวณราคา
 - `POST /api/bookings/draft`
 - `GET|PUT /api/bookings/:bookingNo`
 - `GET|PUT /api/bookings/:bookingNo/passengers`

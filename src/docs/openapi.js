@@ -123,6 +123,7 @@ const schemas = {
     required: ['price_type', 'ticket_type_id', 'effective_from', 'amount'],
     properties: {
       price_type: { type: 'string', enum: ['standard', 'agent'] },
+      day_type: { type: 'string', enum: ['all', 'weekday', 'weekend', 'holiday'] },
       ticket_type_id: { type: 'string', format: 'uuid' },
       agent_id: { type: 'string', format: 'uuid', nullable: true },
       effective_from: { type: 'string', format: 'date' },
