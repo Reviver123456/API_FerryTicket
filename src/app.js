@@ -57,6 +57,44 @@ const docsHelmet = helmet({
   },
   crossOriginEmbedderPolicy: false
 });
+const defaultCors = cors(corsOptions);
+const openApiCors = cors();
+const rootEndpoints = [
+  'GET /',
+  'GET /health',
+  'GET /docs',
+  'GET /docs/openapi.json',
+  'POST /api/auth/register',
+  'POST /api/auth/login',
+  'POST /api/auth/forgot-password',
+  'POST /api/auth/reset-password',
+  'GET /api/auth/me',
+  'PUT /api/auth/me',
+  'POST /api/auth/me/profile-image',
+  'POST /api/auth/logout',
+  'GET /api/roles',
+  'GET /api/permissions',
+  'GET /api/ticket-types',
+  'POST /api/ticket-types',
+  'GET /api/schedules',
+  'POST /api/schedules',
+  'GET /api/prices',
+  'POST /api/bookings/draft',
+  'GET /api/bookings',
+  'PUT /api/bookings/:bookingNo',
+  'POST /api/payments',
+  'GET /api/payments',
+  'POST /api/payments/webhook/callback',
+  'GET /api/tickets',
+  'GET /api/notifications',
+  'GET /api/dashboard',
+  'GET /api/reports/sales',
+  'POST /api/pos/sales',
+  'GET /api/agents',
+  'GET /api/settings',
+  'GET /api/users'
+];
+const openApiDocumentCache = new Map();
 
 app.use(requestContext);
 app.use((req, res, next) => {
@@ -67,9 +105,9 @@ app.use((req, res, next) => {
 });
 app.use((req, res, next) => {
   if (req.path === '/docs/openapi.json') {
-    return cors()(req, res, next);
+    return openApiCors(req, res, next);
   }
-  return cors(corsOptions)(req, res, next);
+  return defaultCors(req, res, next);
 });
 app.use(express.json({ limit: env.jsonBodyLimit }));
 app.use(createRateLimiter({
@@ -81,47 +119,21 @@ app.use(createRateLimiter({
 app.get('/', (req, res) => ok(res, {
   name: 'Ferry Ticketing API',
   version: '2.0.0',
-  endpoints: [
-    'GET /',
-    'GET /health',
-    'GET /docs',
-    'GET /docs/openapi.json',
-    'POST /api/auth/register',
-    'POST /api/auth/login',
-    'POST /api/auth/forgot-password',
-    'POST /api/auth/reset-password',
-    'GET /api/auth/me',
-    'PUT /api/auth/me',
-    'POST /api/auth/me/profile-image',
-    'POST /api/auth/logout',
-    'GET /api/roles',
-    'GET /api/permissions',
-    'GET /api/ticket-types',
-    'POST /api/ticket-types',
-    'GET /api/schedules',
-    'POST /api/schedules',
-    'GET /api/prices',
-    'POST /api/bookings/draft',
-    'GET /api/bookings',
-    'PUT /api/bookings/:bookingNo',
-    'POST /api/payments',
-    'GET /api/payments',
-    'POST /api/payments/webhook/callback',
-    'GET /api/tickets',
-    'GET /api/notifications',
-    'GET /api/dashboard',
-    'GET /api/reports/sales',
-    'POST /api/pos/sales',
-    'GET /api/agents',
-    'GET /api/settings',
-    'GET /api/users'
-  ]
+  endpoints: rootEndpoints
 }));
 
 app.get('/docs/openapi.json', (req, res) => {
   const serverUrl = `${req.protocol}://${req.get('host')}`;
+  const cachedDocument =
+    openApiDocumentCache.get(serverUrl) ||
+    buildOpenApiDocument(serverUrl);
+
+  if (!openApiDocumentCache.has(serverUrl)) {
+    openApiDocumentCache.set(serverUrl, cachedDocument);
+  }
+
   res.set('Access-Control-Allow-Origin', '*');
-  return res.json(buildOpenApiDocument(serverUrl));
+  return res.json(cachedDocument);
 });
 
 app.get('/docs', (req, res) => res.type('html').send(swaggerUiHtml));
